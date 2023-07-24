@@ -3,6 +3,9 @@ use std::fs::File;
 use std::io::ErrorKind::WouldBlock;
 use std::thread;
 use std::time::Duration;
+
+use image::{DynamicImage,ImageBuffer};
+
 pub fn display_list() -> Vec<Display> {
     let temp = Display::all().expect("Can't find any screen");
     return temp;
@@ -32,23 +35,18 @@ pub fn take_screenshot(path: String, display: Display) -> Option<()> {
         };
 
         println!("Captured! Saving...");
-
-        // Flip the ARGB image into a BGRA image.
-
-        let mut bitflipped = Vec::with_capacity(w * h * 4);
         let stride = buffer.len() / h;
 
-        for y in 0..h {
-            for x in 0..w {
-                let i = stride * y + 4 * x;
-                bitflipped.extend_from_slice(&[buffer[i + 2], buffer[i + 1], buffer[i], 255]);
-            }
-        }
-
+        let mut img = ImageBuffer::from_fn(w as u32,h as u32, |x, y| {
+            let i = stride * y as usize + 4 * x as usize;
+            image::Rgb([buffer[i + 2], buffer[i + 1], buffer[i]]) //flip the bits from ARGB image into a BGRA image.
+        });
+        println!("dimensions {:?}", img.dimensions());
         // Save the image.
 
-        repng::encode(File::create(path).unwrap(), w as u32, h as u32, &bitflipped).unwrap();
-
+        //repng::encode(File::create(path).unwrap(), w as u32, h as u32, &bitflipped).unwrap();
+        //image::save_buffer(path, &buffer, w as u32, h as u32, image::ColorType::Rgba8).unwrap();
+        img.save(path).unwrap();
         println!("Image saved to `screenshot.png`.");
         break Some(());
     }
