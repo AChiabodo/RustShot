@@ -46,8 +46,9 @@ pub fn take_screenshot(path: String, display: Display) -> Option<()> {
 
         //repng::encode(File::create(path).unwrap(), w as u32, h as u32, &bitflipped).unwrap();
         //image::save_buffer(path, &buffer, w as u32, h as u32, image::ColorType::Rgba8).unwrap();
+        let temp = path.clone();
         img.save(path).unwrap();
-        println!("Image saved to `screenshot.png`.");
+        println!("Image saved to `{}`.",temp);
         break Some(());
     }
 }

@@ -8,5 +8,8 @@ fn main()  {
         println!("Display {} : {} x {}",i,dspl.height(),dspl.width());
     }
     //gui::main_window().unwrap();
-    screen::take_screenshot("screenshot.png".to_string(), Display::primary().expect("Couldn't find primary display."));
+    //screen::take_screenshot("screenshot.png".to_string(), Display::primary().expect("Couldn't find primary display."));
+    for (i,display) in Display::all().unwrap().into_iter().enumerate() {
+        screen::take_screenshot(format!("screenshot_{}.png",i),display);
+    }
 }
