@@ -1,5 +1,8 @@
 use druid::widget::{Button, Flex, Label};
 use druid::{AppLauncher, LocalizedString, PlatformError, Widget, WidgetExt, WindowDesc};
+use scrap::Display;
+
+use crate::screen::take_screenshot;
 
 fn ui_builder() -> impl Widget<u32> {
     // The label text will be computed dynamically based on the current locale and count
@@ -20,11 +23,16 @@ fn ui_builder() -> impl Widget<u32> {
         }
         )
         .padding(5.0);
-
+    let button_screenshot = Button::new("Take Screenshot")
+        .on_click( |_ctx, data : &mut u32, _env| -> (){
+            take_screenshot("screenshot.png".to_string(), Display::primary().expect("Couldn't find display"));
+        } )
+        .padding(5.0);
     Flex::column()
         .with_child(label)
         .with_child(button_increment)
         .with_child(button_decrement)
+        .with_child(button_screenshot)
 }
 
 pub fn main_window() -> Result<(), PlatformError>{

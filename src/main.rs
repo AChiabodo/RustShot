@@ -12,4 +12,5 @@ fn main()  {
     for (i,display) in Display::all().unwrap().into_iter().enumerate() {
         screen::take_screenshot(format!("screenshot_{}.png",i),display);
     }
+    gui::main_window().unwrap();
 }
