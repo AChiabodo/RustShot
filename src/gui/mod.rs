@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use druid::piet::ImageFormat;
 use druid::widget::{Button, Flex, Label};
 use druid::{AppLauncher, LocalizedString, PlatformError, Widget, WidgetExt, WindowDesc, Data, Lens};
 use image::ImageBuffer;
@@ -21,15 +22,21 @@ struct AppData {
 }
 
 fn twmp_widget() -> impl Widget<AppData> {
-    let image_data = ImageBuf::empty();
+    let image_data = ImageBuf::from_raw(
+        vec![0; 100 * 100 * 4],
+        ImageFormat::Rgb,
+        100,
+        100,
+    );
     let image_widget = Image::new(image_data)
         // set the fill strategy
         .fill_mode(FillStrat::Fill)
         // set the interpolation mode
         .interpolation_mode(InterpolationMode::Bilinear);
+
     let button_screenshot = Button::new("Take Screenshot")
     .on_click( |_ctx, data, _env| -> (){
-        
+
         *data = AppData{image : Some(take_screenshot(Display::primary().expect("Couldn't find display")).expect("Couldn't take screenshot")), display : None};
         //let (w,h) = img.dimensions();
         //image::save_buffer("screenshot.png".to_string(), &img, w, h, image::ColorType::Rgb8).unwrap();
@@ -42,9 +49,9 @@ fn twmp_widget() -> impl Widget<AppData> {
         }
     });
     Flex::column()
-        .with_child(image_widget)
         .with_child(button_screenshot)
         .with_child(button_save)
+        .with_child(image_widget)
 }
 
 fn ui_builder() -> impl Widget<u32> {
