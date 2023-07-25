@@ -1,4 +1,4 @@
-use druid::widget::{ViewSwitcher, FillStrat, Image, Svg, Flex};
+use druid::widget::{ViewSwitcher, Image, Flex};
 use druid::Widget;
 use druid::Lens;
 use druid::Data;

@@ -1,10 +1,9 @@
 use scrap::{Capturer, Display};
-use std::fs::File;
 use std::io::ErrorKind::WouldBlock;
 use std::thread;
 use std::time::Duration;
 
-use image::{DynamicImage,ImageBuffer};
+use image::ImageBuffer;
 
 pub fn display_list() -> Vec<Display> {
     let temp = Display::all().expect("Can't find any screen");
