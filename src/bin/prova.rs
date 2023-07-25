@@ -42,10 +42,6 @@ fn build_root_widget() -> impl Widget<State> {
             move |_, data: &State, _env| {
                 if data.display_image.is_some() {
                     Box::new(
-                        //if I don't use Arc<RwLock<?>> here, the compiler complains that Imgbuf doesn't impl Data
-                        //The initial image is shown, but when Imgbuf changes, the widget is not updated
-                        //I would imagine this has to do with it being an Arc<RwLock<?>>, but I'm not sure how to make druid and rust happy at the same time
-                        //Is there a wrapper widget available to give me the option of using a closure to update instead of a lens? Like how Label::dynamic(|data, env|) works?
                         Image::new(data.display_image.as_ref().unwrap().as_ref().clone()).lens(State::display_image)
                     )
                 }
