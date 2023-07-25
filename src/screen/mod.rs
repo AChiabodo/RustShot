@@ -33,7 +33,7 @@ pub fn take_screenshot(display: Display) -> Option<ImageBuffer<image::Rgb<u8>, V
             }
         };
 
-        println!("Captured! Saving...");
+        println!("Captured!");
         let stride = buffer.len() / h;
 
         let img = ImageBuffer::from_fn(w as u32,h as u32, |x, y| {

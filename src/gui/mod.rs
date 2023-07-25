@@ -11,39 +11,37 @@ use crate::screen::take_screenshot;
 
 #[derive(Clone, Data, Lens)]
 struct State {
-    image: Option<Arc<ImageBuf>>,
+    image: Option<ImageBuf>,
     #[data(eq)]
     display: Option<u32>
 }
 
 fn twmp_widget() -> impl Widget<State> {
     Flex::column()
-        .with_child(Container::new(Button::new("Click me").on_click(|ctx, data: &mut State, _env|{
-            let mut temp = ctx.window().clone();
-            temp.set_window_state(druid::WindowState::Minimized);
-            
-            let thread = thread::spawn(||{
-                let temp = take_screenshot(Display::primary().expect("Couldn't find display")).expect("Couldn't take screenshot");
-                return temp;
-            });
-            
-            let screenshot = thread.join().expect("Failed to take the screenshot");
-            
+        .with_child(Flex::row().with_child(Button::new("Take screenshot").on_click(|_ctx, data: &mut State, _env|{
+            let screenshot = take_screenshot(Display::primary().expect("Couldn't find display")).expect("Couldn't take screenshot");
             let new_image_buf = ImageBuf::from_raw(screenshot.to_vec(), ImageFormat::Rgb, screenshot.width() as usize, screenshot.height() as usize);
             match &mut data.image {
-                None => data.image = Some(Arc::new(new_image_buf)),
-                Some(val) => *Arc::make_mut(val) = new_image_buf
+                None => data.image = Some(new_image_buf),
+                Some(val) => *val = new_image_buf
             }
-            temp.set_window_state(druid::WindowState::Maximized);
             }
-        )))
+        )).with_child(Button::new("Save image")).on_click(|_ctx, data: &mut State, _env| {
+            match &data.image {
+                None => (),
+                Some(val) => match image::save_buffer("./screen.png", val.raw_pixels(), val.width() as u32, val.height() as u32, image::ColorType::Rgb8) {
+                    Ok(_) => (),
+                    Err(err) => println!("{}", err),
+                },
+            }
+        }))
         .with_flex_child(
             ViewSwitcher::new(
             |data: &State, _env| data.clone(),
             move |_, data: &State, _env| {
                 if data.image.is_some() {
                     Box::new(
-                        Image::new(data.image.as_ref().unwrap().as_ref().clone()).lens(State::image)
+                        Image::new(data.image.as_ref().unwrap().clone()).lens(State::image)
                     )
                 }
                 else {
