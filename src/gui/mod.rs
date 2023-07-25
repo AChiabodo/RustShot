@@ -4,10 +4,16 @@ use scrap::Display;
 
 use crate::screen::take_screenshot;
 
+use druid::{
+    widget::{Image, FillStrat},
+    piet::{ImageBuf, InterpolationMode},
+};
+
 fn ui_builder() -> impl Widget<u32> {
     // The label text will be computed dynamically based on the current locale and count
     let text =
         LocalizedString::new("hello-counter").with_arg("count", |data: &u32, _env| (*data).into());
+
     let label = Label::new(text).padding(5.0).center();
     let button_increment = Button::new("increment")
         .on_click(|_ctx, data, _env| *data += 1)
@@ -23,9 +29,19 @@ fn ui_builder() -> impl Widget<u32> {
         }
         )
         .padding(5.0);
+
+        let image_data = ImageBuf::empty();
+        let image_widget = Image::new(image_data)
+            // set the fill strategy
+            .fill_mode(FillStrat::Fill)
+            // set the interpolation mode
+            .interpolation_mode(InterpolationMode::Bilinear);
+
     let button_screenshot = Button::new("Take Screenshot")
         .on_click( |_ctx, data : &mut u32, _env| -> (){
-            take_screenshot("screenshot.png".to_string(), Display::primary().expect("Couldn't find display"));
+            let img = take_screenshot(Display::primary().expect("Couldn't find display")).expect("Couldn't take screenshot");
+            let (w,h) = img.dimensions();
+            image::save_buffer("screenshot.png".to_string(), &img, w, h, image::ColorType::Rgb8).unwrap();
         } )
         .padding(5.0);
     Flex::column()
@@ -33,6 +49,7 @@ fn ui_builder() -> impl Widget<u32> {
         .with_child(button_increment)
         .with_child(button_decrement)
         .with_child(button_screenshot)
+        .with_child(image_widget)
 }
 
 pub fn main_window() -> Result<(), PlatformError>{
