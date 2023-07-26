@@ -1,5 +1,5 @@
 [package]
-name = "RustShot"
+name = "rust_shot"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,6 +7,8 @@ edition = "2021"
 
 [dependencies]
 druid = {version = "0.8.3", features = ["svg", "image", "png", "jpeg", "jpeg_rayon", "gif", "bmp", "ico", "tiff", "webp", "pnm", "dds", "tga", "farbfeld", "dxt", "hdr"]}
+eframe = "0.22.0"
+egui_extras = "0.22.0"
 image = "0.24.6"
 rand = "0.8.5"
 repng = "0.2.2"
