@@ -1,15 +1,17 @@
-use crate::screen::take_screenshot;
+use crate::screen::{take_screenshot, self, display_list};
 use eframe::egui::{CentralPanel, Image, Layout, TopBottomPanel, Button, Context, Align, ColorImage, ScrollArea, KeyboardShortcut, Modifiers, Key, UserAttentionType};
 use eframe::{App, Frame};
 use eframe::{NativeOptions, run_native};
 use egui_extras::RetainedImage;
 use image::{EncodableLayout, ImageBuffer, Rgb};
+use std::sync::Arc;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use scrap::Display;
 struct RustShot{
     screenshot: Option<ImageBuffer<Rgb<u8>, Vec<u8>>>,
+    display : Option<usize>,
     receiver: Receiver<ImageBuffer<Rgb<u8>, Vec<u8>>>,
     sender: Sender<ImageBuffer<Rgb<u8>, Vec<u8>>>,
 }
@@ -23,6 +25,7 @@ impl RustShot {
         let (tx, rx) = channel();
         RustShot {
             screenshot: None,
+            display : None,
             receiver: rx,
             sender: tx,
         }
@@ -50,10 +53,19 @@ impl App for RustShot{
                     frame.set_visible(false);
                     let tx = self.sender.clone();
                     let c = ctx.clone();
+                    let value = self.display.clone().unwrap();
                     //Thread that manages screenshots
+                    //TODO : Find a way to share the selected display with the thread
                     thread::spawn( move || {
                         thread::sleep(Duration::from_millis(300));
-                        let screenshot = take_screenshot(Display::primary().unwrap()).unwrap();
+                        let mut current_display = Display::primary().expect("Could not find dislay");
+                        for (i,display) in screen::display_list().into_iter().enumerate(){
+                            if i==value {
+                                current_display = display;
+                                break;
+                            }
+                        }
+                        let screenshot = take_screenshot(current_display).unwrap();
                         match tx.send(screenshot){
                             //Force update() to be called again, so that the application window is made visible again. (when it's not visible otherwise update won't be called)
                             Ok(_) => c.request_repaint(),
@@ -72,6 +84,11 @@ impl App for RustShot{
                         }
                         None => {}
                     }
+                }
+                let mut value = 0;
+                let display_selector = ui.add(eframe::egui::Slider::new(&mut value, 0..=(screen::display_list().len() - 1)));
+                if display_selector.changed(){
+                    self.display = Some(value as usize);
                 }
             })
         });
