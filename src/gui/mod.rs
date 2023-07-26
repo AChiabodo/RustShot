@@ -1,61 +1,93 @@
-use std::{sync::Arc, thread, time::Duration};
-
-use druid::{AppLauncher, PlatformError, Widget, WidgetExt, WindowDesc, Data, Lens, widget::{FlexParams, CrossAxisAlignment}};
-use scrap::Display;
-use druid::{
-    WindowHandle,
-    widget::{Button, Flex, Container, ViewSwitcher,Image},
-    piet::{ImageBuf,ImageFormat},
-};
 use crate::screen::take_screenshot;
-
-#[derive(Clone, Data, Lens)]
-struct State {
-    image: Option<ImageBuf>,
-    #[data(eq)]
-    display: Option<u32>
+use eframe::egui::{CentralPanel, Image, Layout, TopBottomPanel, Button, Context, Align, ColorImage, ScrollArea, KeyboardShortcut, Modifiers, Key, UserAttentionType};
+use eframe::{App, Frame};
+use eframe::{NativeOptions, run_native};
+use egui_extras::RetainedImage;
+use image::{EncodableLayout, ImageBuffer, Rgb};
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread;
+use std::time::Duration;
+use scrap::Display;
+struct RustShot{
+    screenshot: Option<ImageBuffer<Rgb<u8>, Vec<u8>>>,
+    receiver: Receiver<ImageBuffer<Rgb<u8>, Vec<u8>>>,
+    sender: Sender<ImageBuffer<Rgb<u8>, Vec<u8>>>,
 }
 
-fn twmp_widget() -> impl Widget<State> {
-    Flex::column()
-        .with_child(Flex::row().with_child(Button::new("Take screenshot").on_click(|_ctx, data: &mut State, _env|{
-            let screenshot = take_screenshot(Display::primary().expect("Couldn't find display")).expect("Couldn't take screenshot");
-            let new_image_buf = ImageBuf::from_raw(screenshot.to_vec(), ImageFormat::Rgb, screenshot.width() as usize, screenshot.height() as usize);
-            match &mut data.image {
-                None => data.image = Some(new_image_buf),
-                Some(val) => *val = new_image_buf
+impl RustShot {
+    fn new(cc: &eframe::CreationContext<'_>) -> Self {
+        // Customize egui here with cc.egui_ctx.set_fonts and cc.egui_ctx.set_visuals.
+        // Restore app state using cc.storage (requires the "persistence" feature).
+        // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
+        // for e.g. egui::PaintCallback.
+        let (tx, rx) = channel();
+        RustShot {
+            screenshot: None,
+            receiver: rx,
+            sender: tx,
+        }
+    }
+}
+
+
+impl App for RustShot{
+    fn update(&mut self, ctx: &Context, frame: &mut Frame) {
+        match self.receiver.try_recv() {
+            Ok (screenshot) => {
+                //Show the application window again
+                frame.set_visible(true);
+                //let color_image = ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes());
+                //self.screenshot = Some(RetainedImage::from_color_image("screenshot", color_image));
+                self.screenshot = Some(screenshot);
             }
-            }
-        )).with_child(Button::new("Save image")).on_click(|_ctx, data: &mut State, _env| {
-            match &data.image {
-                None => (),
-                Some(val) => match image::save_buffer("./screen.png", val.raw_pixels(), val.width() as u32, val.height() as u32, image::ColorType::Rgb8) {
-                    Ok(_) => (),
-                    Err(err) => println!("{}", err),
+            Err(err) => (),
+        }
+        TopBottomPanel::top("top panel").show(ctx, |ui| {
+            ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                let screenshot_btn = ui.add(Button::new("Take Screenshot"));
+                if screenshot_btn.clicked(){
+                    //Hide the application window
+                    frame.set_visible(false);
+                    let tx = self.sender.clone();
+                    let c = ctx.clone();
+                    //Thread that manages screenshots
+                    thread::spawn( move || {
+                        thread::sleep(Duration::from_millis(300));
+                        let screenshot = take_screenshot(Display::primary().unwrap()).unwrap();
+                        match tx.send(screenshot){
+                            //Force update() to be called again, so that the application window is made visible again. (when it's not visible otherwise update won't be called)
+                            Ok(_) => c.request_repaint(),
+                            Err(err) => println!("{}", err)
+                        }
+                    });
+                }
+                let screenshot_save_btn = ui.add(Button::new("Save Screenshot"));
+                if screenshot_save_btn.clicked(){
+                    match &self.screenshot {
+                        Some(screenshot) => {
+                            match image::save_buffer("./screen.png", &screenshot, screenshot.width() as u32, screenshot.height() as u32, image::ColorType::Rgb8) {
+                                Ok(_) => println!("Screenshot saved"),
+                                Err(err) => println!("{}", err)
+                            }
+                        }
+                        None => {}
+                    }
+                }
+            })
+        });
+        CentralPanel::default().show(ctx, |ui| {
+            match &mut self.screenshot{
+                Some(screenshot) => {
+                    ScrollArea::both().show(ui, |ui| RetainedImage::from_color_image("screenshot", ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes())).show(ui))
                 },
+                None => ScrollArea::both().show(ui, |ui| ui.label("No screenshots yet"))
             }
-        }))
-        .with_flex_child(
-            ViewSwitcher::new(
-            |data: &State, _env| data.clone(),
-            move |_, data: &State, _env| {
-                if data.image.is_some() {
-                    Box::new(
-                        Image::new(data.image.as_ref().unwrap().clone()).lens(State::image)
-                    )
-                }
-                else {
-                    Box::new(Image::new(ImageBuf::from_raw(vec!(0, 0, 0), druid::piet::ImageFormat::Rgb, 1, 1)))
-                }
-            },
-        ),FlexParams::new(1.0, CrossAxisAlignment::Fill)
-        )
+        });
+    }
+
 }
 
-pub fn main_window() -> Result<(), PlatformError>{
-    let main_window = WindowDesc::new(twmp_widget());
-    let data = State { image: None, display: None };
-    AppLauncher::with_window(main_window)
-        .log_to_console()
-        .launch(data)
+pub fn main_window() -> eframe::Result<()>{
+    let window_option = NativeOptions::default();
+    run_native("RustShot", window_option, Box::new(|cc| Box::new(RustShot::new(cc))))
 }
