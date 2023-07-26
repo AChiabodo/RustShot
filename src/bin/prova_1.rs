@@ -1,4 +1,4 @@
-use ::RustShot::screen::take_screenshot;
+use ::rust_shot::screen::take_screenshot;
 use eframe::egui::{CentralPanel, Image, Layout, TopBottomPanel, Button, Context, Align, ColorImage, ScrollArea, KeyboardShortcut, Modifiers, Key, UserAttentionType};
 use eframe::{App, Frame};
 use eframe::{NativeOptions, run_native};
@@ -9,7 +9,7 @@ use std::thread;
 use std::time::Duration;
 use scrap::Display;
 struct RustShot{
-    screenshot: Option<RetainedImage>,
+    screenshot: Option<ImageBuffer<Rgb<u8>, Vec<u8>>>,
     receiver: Receiver<ImageBuffer<Rgb<u8>, Vec<u8>>>,
     sender: Sender<ImageBuffer<Rgb<u8>, Vec<u8>>>,
 }
@@ -36,14 +36,15 @@ impl App for RustShot{
             Ok (screenshot) => {
                 //Show the application window again
                 frame.set_visible(true);
-                let color_image = ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes());
-                self.screenshot = Some(RetainedImage::from_color_image("screenshot", color_image));
+                //let color_image = ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes());
+                //self.screenshot = Some(RetainedImage::from_color_image("screenshot", color_image));
+                self.screenshot = Some(screenshot);
             }
             Err(err) => (),
         }
         TopBottomPanel::top("top panel").show(ctx, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
-                let screenshot_btn = ui.add(Button::new("Screenshot"));
+                let screenshot_btn = ui.add(Button::new("Take Screenshot"));
                 if screenshot_btn.clicked(){
                     //Hide the application window
                     frame.set_visible(false);
@@ -60,12 +61,24 @@ impl App for RustShot{
                         }
                     });
                 }
+                let screenshot_save_btn = ui.add(Button::new("Save Screenshot"));
+                if screenshot_save_btn.clicked(){
+                    match &self.screenshot {
+                        Some(screenshot) => {
+                            match image::save_buffer("./screen.png", &screenshot, screenshot.width() as u32, screenshot.height() as u32, image::ColorType::Rgb8) {
+                                Ok(_) => println!("Screenshot saved"),
+                                Err(err) => println!("{}", err)
+                            }
+                        }
+                        None => {}
+                    }
+                }
             })
         });
         CentralPanel::default().show(ctx, |ui| {
             match &mut self.screenshot{
                 Some(screenshot) => {
-                    ScrollArea::both().show(ui, |ui| screenshot.show(ui))
+                    ScrollArea::both().show(ui, |ui| RetainedImage::from_color_image("screenshot", ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes())).show(ui))
                 },
                 None => ScrollArea::both().show(ui, |ui| ui.label("No screenshots yet"))
             }
