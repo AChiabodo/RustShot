@@ -25,7 +25,7 @@ impl RustShot {
         let (tx, rx) = channel();
         RustShot {
             screenshot: None,
-            display : None,
+            display : Some(0),
             receiver: rx,
             sender: tx,
         }
@@ -53,18 +53,25 @@ impl App for RustShot{
                     frame.set_visible(false);
                     let tx = self.sender.clone();
                     let c = ctx.clone();
-                    let value = self.display.clone().unwrap();
+                    let value = Arc::new(self.display.unwrap().clone());
                     //Thread that manages screenshots
                     //TODO : Find a way to share the selected display with the thread
                     thread::spawn( move || {
                         thread::sleep(Duration::from_millis(300));
-                        let mut current_display = Display::primary().expect("Could not find dislay");
-                        for (i,display) in screen::display_list().into_iter().enumerate(){
-                            if i==value {
-                                current_display = display;
-                                break;
+                        let mut iter = screen::display_list().into_iter().enumerate();
+                        let current_display = loop {
+                            match iter.next() {
+                              Some( (i,display) ) => {
+                                if(i == *value){
+                                    break display;
+                                }
+                                continue;
+                              },
+                              None => {
+                                break Display::primary().unwrap();
+                              }  
                             }
-                        }
+                        };
                         let screenshot = take_screenshot(current_display).unwrap();
                         match tx.send(screenshot){
                             //Force update() to be called again, so that the application window is made visible again. (when it's not visible otherwise update won't be called)
@@ -86,7 +93,7 @@ impl App for RustShot{
                     }
                 }
                 let mut value = 0;
-                let display_selector = ui.add(eframe::egui::Slider::new(&mut value, 0..=(screen::display_list().len() - 1)));
+                let display_selector = ui.add(eframe::egui::Slider::new(&mut value, 0..=(screen::display_list().len() - 1)).text("Display selector"));
                 if display_selector.changed(){
                     self.display = Some(value as usize);
                 }
