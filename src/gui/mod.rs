@@ -1,5 +1,5 @@
 use crate::screen::{take_screenshot, self, display_list};
-use eframe::egui::{CentralPanel, Image, Layout, TopBottomPanel, Button, Context, Align, ColorImage, ScrollArea, KeyboardShortcut, Modifiers, Key, UserAttentionType};
+use eframe::egui::{CentralPanel, Image, Layout, TopBottomPanel, Button, Context, Align, ColorImage, ScrollArea, KeyboardShortcut, Modifiers, Key, UserAttentionType, ComboBox};
 use eframe::{App, Frame};
 use eframe::{NativeOptions, run_native};
 use egui_extras::RetainedImage;
@@ -93,8 +93,22 @@ impl App for RustShot{
                     }
                 }
                 let mut value = 0;
-                let display_selector = ui.add(eframe::egui::Slider::new(&mut value, 0..=(screen::display_list().len() - 1)).text("Display selector"));
+                /*let display_selector = ui.add(eframe::egui::Slider::new(&mut value, 0..=(screen::display_list().len() - 1)).text("Display selector"));
                 if display_selector.changed(){
+                    self.display = Some(value as usize);
+                }*/
+                let mut selected = 0;
+                let display_selector = 
+                        ComboBox::from_label("Select Display")
+                        .selected_text(format!("{:?}", selected))
+                        .show_ui(ui, |ui| {
+
+                            for (i,display) in screen::display_list().into_iter().enumerate(){
+                                ui.selectable_value(&mut selected, i, format!("Display {} - {}x{} px",i,display.width(),display.height()));
+                            }
+
+                        });
+                if display_selector.response.changed() {
                     self.display = Some(value as usize);
                 }
             })
