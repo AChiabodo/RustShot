@@ -84,9 +84,15 @@ impl App for RustShot{
                 if screenshot_save_btn.clicked(){
                     match &self.screenshot {
                         Some(screenshot) => {
-                            match image::save_buffer("./screen.png", &screenshot, screenshot.width() as u32, screenshot.height() as u32, image::ColorType::Rgb8) {
-                                Ok(_) => println!("Screenshot saved"),
-                                Err(err) => println!("{}", err)
+                            let path = tinyfiledialogs::save_file_dialog("Select save location", "./");
+                            match path {
+                                Some(path) => {
+                                    match image::save_buffer(path, &screenshot, screenshot.width() as u32, screenshot.height() as u32, image::ColorType::Rgb8) {
+                                        Ok(_) => println!("Screenshot saved"),
+                                        Err(err) => println!("{}", err)
+                                    }
+                                },
+                                None => {}
                             }
                         }
                         None => {}
