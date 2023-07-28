@@ -1,4 +1,5 @@
 use crate::screen::{take_screenshot, self, display_list};
+use druid::Rect;
 use eframe::egui::{CentralPanel, Image, Layout, TopBottomPanel, Button, Context, Align, ColorImage, ScrollArea, KeyboardShortcut, Modifiers, Key, UserAttentionType, ComboBox};
 use eframe::{App, Frame};
 use eframe::{NativeOptions, run_native};
@@ -9,6 +10,8 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use scrap::Display;
+
+
 struct RustShot{
     screenshot: Option<ImageBuffer<Rgb<u8>, Vec<u8>>>,
     display : Option<usize>,
@@ -54,6 +57,7 @@ impl App for RustShot{
                     let tx = self.sender.clone();
                     let c = ctx.clone();
                     let value = Arc::new(self.display.unwrap().clone());
+                    println!("Display : {}", value);
                     //Thread that manages screenshots
                     //TODO : Find a way to share the selected display with the thread
                     thread::spawn( move || {
@@ -62,8 +66,10 @@ impl App for RustShot{
                         let current_display = loop {
                             match iter.next() {
                               Some( (i,display) ) => {
-                                if(i == *value){
+                                if i == *value {
+                                    println!("i : {}", i );
                                     break display;
+
                                 }
                                 continue;
                               },
@@ -106,17 +112,20 @@ impl App for RustShot{
                 let mut selected = 0;
                 let display_selector = 
                         ComboBox::from_label("Select Display")
-                        .selected_text(format!("{:?}", selected))
+                        .selected_text(format!("{:?}", self.display.unwrap()))
                         .show_ui(ui, |ui| {
-
                             for (i,display) in screen::display_list().into_iter().enumerate(){
-                                ui.selectable_value(&mut selected, i, format!("Display {} - {}x{} px",i,display.width(),display.height()));
+                                if ui.selectable_value(&mut self.display.clone().unwrap(), i, format!("Display {} - {}x{} px",i,display.width(),display.height())).clicked(){
+                                    selected = i;
+                                    println!("Selected : {}", selected);
+                                    self.display = Some(selected);
+                                }
                             }
-
                         });
-                if display_selector.response.changed() {
-                    self.display = Some(value as usize);
-                }
+                
+                let crop_btn = ui.add(Button::new("Crop"));
+               
+            
             })
         });
         CentralPanel::default().show(ctx, |ui| {
@@ -135,3 +144,5 @@ pub fn main_window() -> eframe::Result<()>{
     let window_option = NativeOptions::default();
     run_native("RustShot", window_option, Box::new(|cc| Box::new(RustShot::new(cc))))
 }
+
+
