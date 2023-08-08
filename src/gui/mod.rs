@@ -73,13 +73,13 @@ impl App for RustShot {
                     frame.set_visible(false);
                     let tx = self.sender.clone();
                     let c = ctx.clone();
-                    let value = Arc::new(self.display.unwrap().clone());
+                    let value = self.display.unwrap().clone();
                     println!("Display : {}", value);
                     //Thread that manages screenshots
                     //TODO : Find a way to share the selected display with the thread
                     thread::spawn(move || {
                         thread::sleep(Duration::from_millis(300));
-                        let current_display = select_display(*value as usize).expect("Cannot select the correct display");
+                        let current_display = select_display(value as usize).expect("Cannot select the correct display");
                         let screenshot = take_screenshot(current_display).unwrap();
                         match tx.send(screenshot) {
                             //Force update() to be called again, so that the application window is made visible again. (when it's not visible otherwise update won't be called)
