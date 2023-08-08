@@ -1,6 +1,5 @@
 use crate::screen::{take_screenshot, self, display_list};
-use druid::Rect;
-use eframe::egui::{CentralPanel, Image, Layout, TopBottomPanel, Button, Context, Align, ColorImage, ScrollArea, KeyboardShortcut, Modifiers, Key, UserAttentionType, ComboBox};
+use eframe::egui::{CentralPanel, Layout, TopBottomPanel, Button, Context, Align, ColorImage, ScrollArea, ComboBox};
 use eframe::{App, Frame};
 use eframe::{NativeOptions, run_native};
 use egui_extras::RetainedImage;
