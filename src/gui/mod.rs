@@ -57,10 +57,18 @@ enum KeyCommand {
 }
 
 struct PaintState {
-    dragging: bool,
-    start_ptr: Pos2,
-    end_ptr: Pos2,
+    painting: bool,
+    last_ptr: Pos2,
     curr_ptr: Pos2,
+}
+
+impl PaintState {
+    /// Reset the paint state to its default values
+    fn reset(&mut self) {
+        self.painting = false;
+        self.last_ptr = Pos2::default();
+        self.curr_ptr = Pos2::default();
+    }
 }
 
 struct CropState {
@@ -114,9 +122,8 @@ impl RustShot {
                 curr_ptr: Pos2::default(),
             },
             paint_info: PaintState {
-                dragging: false,
-                start_ptr: Pos2::default(),
-                end_ptr: Pos2::default(),
+                painting: false,
+                last_ptr: Pos2::default(),
                 curr_ptr: Pos2::default(),
             },
             action: Action::None,
@@ -130,6 +137,19 @@ impl RustShot {
         self.action = Action::None;
         self.crop_info.reset();
         self.screenshot = self.final_screenshot.clone();
+    }
+
+    /// Used to restore state of the application when stopping the paint action for some reason
+    fn restore_from_paint(&mut self) {
+        self.paint_info.reset();
+        //Restore the original screenshot
+        self.screenshot = self.final_screenshot.clone()
+    }
+
+    fn save_paint_changes(&mut self) {
+        self.paint_info.reset();
+        //Save the changed screenshot as final screenshot
+        self.final_screenshot = self.screenshot.clone();
     }
 
     fn render_top_panel(&mut self, ctx: &Context, frame: &mut Frame) {
@@ -224,6 +244,17 @@ impl RustShot {
                         self.restore_from_crop();
                     }
                 } else if self.action == Action::Paint {
+                    let save_paint_btn = ui.add(Button::new("Save changes"));
+                    let undo_paint_btn = ui.add(Button::new("Undo changes"));
+                    if save_paint_btn.clicked() {
+                        self.action = Action::None;
+                        self.save_paint_changes();
+                    }
+                    if undo_paint_btn.clicked(){
+                        self.action = Action::None;
+                        self.restore_from_paint();
+                    }
+                
                 }
             })
         });
@@ -241,10 +272,7 @@ impl RustShot {
                             screenshot.as_bytes(),
                         ),
                     );
-                    let img = ui.add(
-                        ImageButton::new(retained_img.texture_id(ctx), retained_img.size_vec2())
-                            .frame(false),
-                    );
+                    let img = ui.add(ImageButton::new(retained_img.texture_id(ctx), retained_img.size_vec2()).frame(false).sense(Sense::click_and_drag()));
                     if self.action == Action::Crop {
                         self.crop_logic(img);
                     } else if self.action == Action::Paint {
@@ -331,27 +359,24 @@ impl RustShot {
 
     /// Logic for painting on the image
     fn paint_logic(&mut self, img: Response) {
-        if img.clicked() {
-            self.paint_info.curr_ptr = into_relative_pos(img.hover_pos().unwrap(), img.rect);
-            self.screenshot.as_mut().unwrap().draw_pixel(
-                self.paint_info.curr_ptr.x as u32,
-                self.paint_info.curr_ptr.y as u32,
-                Rgba([0u8, 0u8, 0u8, 255u8]),
-            );
-            //Draw 15x15 circle around the pointer
-            let white = Rgb([255u8, 255u8, 255u8]);
-            let new_screen: Image<Rgb<u8>> = drawing::draw_filled_circle(
-                self.screenshot.as_ref().unwrap().as_rgb8().unwrap(),
-                (
-                    self.paint_info.curr_ptr.x as i32,
-                    self.paint_info.curr_ptr.y as i32,
-                ),
-                5,
-                white,
-            );
+        if img.dragged() {
+            if !self.paint_info.painting{
+                self.paint_info.painting = true;
+                self.paint_info.last_ptr = into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
+            }
+            self.paint_info.curr_ptr = match img.hover_pos() {
+                Some(pos) => into_relative_pos(pos, img.rect),
+                None => self.paint_info.last_ptr,
+            };
+            //Draw a line between the last pointer and the current pointer
+            let new_screen = drawing::draw_line_segment(self.screenshot.as_ref().unwrap().as_rgb8().unwrap(),
+                                                        (self.paint_info.last_ptr.x, self.paint_info.last_ptr.y ),
+                                                        (self.paint_info.curr_ptr.x , self.paint_info.curr_ptr.y ),
+                                                        Rgb([255u8, 255u8, 255u8]));
+            self.paint_info.last_ptr = self.paint_info.curr_ptr;
             self.screenshot = Some(DynamicImage::from(new_screen));
-        } else {
-            //Reset paint info (different from restoring the app from painting !!!)
+        } else if img.drag_released(){
+            self.paint_info.reset();
         }
     }
 }
