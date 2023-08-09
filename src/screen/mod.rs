@@ -3,14 +3,14 @@ use std::io::ErrorKind::WouldBlock;
 use std::thread;
 use std::time::Duration;
 
-use image::ImageBuffer;
+use image::{DynamicImage, ImageBuffer};
 
 pub fn display_list() -> Vec<Display> {
     let temp = Display::all().expect("Can't find any screen");
     return temp;
 }
 
-pub fn take_screenshot(display: Display) -> Option<ImageBuffer<image::Rgb<u8>, Vec<u8>>> {
+pub fn take_screenshot(display: Display) -> Option<DynamicImage> {
     let one_second = Duration::new(1, 0);
     let one_frame = one_second / 60;
 
@@ -40,10 +40,11 @@ pub fn take_screenshot(display: Display) -> Option<ImageBuffer<image::Rgb<u8>, V
             let i = stride * y as usize + 4 * x as usize;
             image::Rgb([buffer[i + 2], buffer[i + 1], buffer[i]]) //flip the bits
         });
+        let img2 = DynamicImage::from(img);
         // Save the image.
         //let temp = img.into_raw();
         //repng::encode(File::create(path).unwrap(), w as u32, h as u32, &bitflipped).unwrap();
         //image::save_buffer(path, &buffer, w as u32, h as u32, image::ColorType::Rgba8).unwrap();
-        break Some(img);
+        break Some(img2);
     }
 }
