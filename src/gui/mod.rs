@@ -1,13 +1,12 @@
 use crate::screen::{self, take_screenshot};
 use eframe::egui::{
-    Align, Button, CentralPanel, ColorImage, ComboBox, Context, ImageButton, ImageData, Layout,
-    Pos2, Rect, Response, ScrollArea, Sense, TopBottomPanel, Window, Key, KeyboardShortcut, Modifiers, InputState,
-};
+    Align, Button, CentralPanel, color_picker, ColorImage, ComboBox, Context, ImageButton, ImageData, KeyboardShortcut, Layout,
+    Pos2, Rect, Response, ScrollArea, Sense, Shape, TopBottomPanel, Window, Key, Modifiers, InputState, Ui};
 use eframe::epaint::Color32;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
-use image::{DynamicImage, EncodableLayout, GenericImage, ImageBuffer, Rgb, Rgba};
+use image::{DynamicImage, EncodableLayout, GenericImage, ImageBuffer, Rgb, Rgba, RgbImage};
 use imageproc::definitions::Image;
 use imageproc::drawing;
 use imageproc::drawing::Canvas;
@@ -18,6 +17,7 @@ use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use rfd::FileDialog;
 
 fn select_display(index: usize) -> Option<Display> {
     let mut iter = screen::display_list().into_iter().enumerate();
@@ -50,6 +50,17 @@ enum Action {
     Paint,
     None,
 }
+
+#[derive(PartialEq, Eq)]
+enum Tool {
+    Drawing,
+    HollowRect,
+    FilledRect,
+    Arrow,
+    HollowCircle,
+    FilledCircle,
+    None,
+}
 #[derive(PartialEq, Eq, PartialOrd, Ord,Hash)]
 enum KeyCommand {
     SaveScreenshot,
@@ -58,19 +69,71 @@ enum KeyCommand {
 }
 
 struct PaintState {
+    curr_tool: Tool,
+    curr_color: [u8; 3],
     painting: bool,
     last_ptr: Pos2,
     curr_ptr: Pos2,
 }
 
 impl PaintState {
-    /// Reset the paint state to its default values
+    /// Reset the paint state to its default values, including the current tool and color
     fn reset(&mut self) {
         self.painting = false;
         self.last_ptr = Pos2::default();
         self.curr_ptr = Pos2::default();
+        self.curr_tool = Tool::None;
+        self.curr_color = [255, 255, 255];
+    }
+
+    /// Reset the paint state to its default values, excluding the current tool and color
+    fn soft_reset(&mut self) {
+        self.painting = false;
+        self.last_ptr = Pos2::default();
+        self.curr_ptr = Pos2::default();
+    }
+
+    fn draw_shape(&self, img: &RgbImage) -> Option<Image<Rgb<u8>>> {
+        let mut start_ptr = self.last_ptr;
+        let width = max(1, (self.curr_ptr.x - self.last_ptr.x).abs() as i32);
+        let height = max(1, (self.curr_ptr.y - self.last_ptr.y).abs() as i32);
+        if self.curr_tool != Tool::Drawing && self.curr_tool != Tool::FilledCircle && self.curr_tool != Tool::HollowCircle {
+            //Permits an easier selection, allowing to generate the area in all directions
+            if self.curr_ptr.x < self.last_ptr.x {
+                start_ptr.x = self.curr_ptr.x;
+            }
+            if self.curr_ptr.y < self.last_ptr.y {
+                start_ptr.y = self.curr_ptr.y;
+            }
+        }
+        let mut new_screen = None;
+        match self.curr_tool {
+            Tool::Drawing => {
+                new_screen = Some(drawing::draw_line_segment(img, (start_ptr.x, start_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_color.into()));
+            }
+            Tool::HollowRect => {
+                new_screen = Some(drawing::draw_hollow_rect(img, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color.into()));
+            }
+            Tool::FilledRect => {
+                new_screen = Some(drawing::draw_filled_rect(img, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color.into()));
+            }
+            Tool::HollowCircle => {
+                let radius = ((width.pow(2) + height.pow(2)) as f64).sqrt() as i32;
+                new_screen = Some(drawing::draw_hollow_circle(img, (start_ptr.x as i32, start_ptr.y as i32), radius, self.curr_color.into()));
+            }
+            Tool::FilledCircle => {
+                let radius = ((width.pow(2) + height.pow(2)) as f64).sqrt() as i32;
+                new_screen = Some(drawing::draw_filled_circle(img, (start_ptr.x as i32, start_ptr.y as i32), radius, self.curr_color.into()));
+            }
+            Tool::Arrow => {
+                new_screen = Some(drawing::draw_line_segment(img, (start_ptr.x, start_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_color.into()));
+            }
+            _ => {}
+        }
+        return new_screen;
     }
 }
+
 
 struct CropState {
     clicked: bool,
@@ -89,8 +152,10 @@ impl CropState {
     }
 }
 
+
 struct RustShot {
     screenshot: Option<DynamicImage>,
+    intermediate_screenshot: Option<DynamicImage>,
     final_screenshot: Option<DynamicImage>,
     display: Option<usize>,
     receiver: Receiver<DynamicImage>,
@@ -116,6 +181,7 @@ impl RustShot {
         RustShot {
             screenshot: None,
             final_screenshot: None,
+            intermediate_screenshot: None,
             display: Some(0),
             receiver: rx,
             sender: tx,
@@ -126,6 +192,8 @@ impl RustShot {
                 curr_ptr: Pos2::default(),
             },
             paint_info: PaintState {
+                curr_tool: Tool::None,
+                curr_color: [255, 255, 255],
                 painting: false,
                 last_ptr: Pos2::default(),
                 curr_ptr: Pos2::default(),
@@ -143,11 +211,12 @@ impl RustShot {
         self.screenshot = self.final_screenshot.clone();
     }
 
-    /// Used to restore state of the application when stopping the paint action for some reason
+    /// Used to restore state of the screenshot when undoing paint changes
     fn restore_from_paint(&mut self) {
         self.paint_info.reset();
         //Restore the original screenshot
-        self.screenshot = self.final_screenshot.clone()
+        self.screenshot = self.final_screenshot.clone();
+        self.intermediate_screenshot = self.final_screenshot.clone();
     }
 
     fn save_paint_changes(&mut self) {
@@ -162,8 +231,6 @@ impl RustShot {
                 if self.action == Action::None {
                     let screenshot_btn = ui.add(Button::new("Take Screenshot"));
                     let screenshot_save_btn = ui.add(Button::new("Save Screenshot"));
-                    let crop_btn = ui.add(Button::new("Crop"));
-                    let paint_btn = ui.add(Button::new("Paint"));
 
                     if screenshot_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::TakeScreenshot).unwrap())) {
                         //Hide the application window
@@ -191,7 +258,13 @@ impl RustShot {
                         match &self.screenshot {
                             Some(screenshot) => {
                                 let path =
-                                    tinyfiledialogs::save_file_dialog("Select save location", "./screen.jpg");
+                                    //tinyfiledialogs::save_file_dialog("Select save location", "./screen.jpg");
+                                    FileDialog::new().add_filter("PNG", &["png"])
+                                        .add_filter("JPG", &["jpg"]).add_filter("GIF", &["gif"])
+                                        .add_filter("WEBP", &["WEBP"]) //ToDelete?
+                                        .add_filter("BMP", &["Bmp"])
+                                        .set_directory("./")
+                                        .save_file();
                                 match path {
                                     Some(path) => {
                                         match image::save_buffer(
@@ -211,38 +284,44 @@ impl RustShot {
                             None => {}
                         }
                     }
-
-                    let mut selected = 0;
-                    ComboBox::from_label("Select Display")
-                        .selected_text(format!("{:?}", self.display.unwrap()))
-                        .show_ui(ui, |ui| {
-                            for (i, display) in screen::display_list().into_iter().enumerate() {
-                                if ui
-                                    .selectable_value(
-                                        &mut self.display.clone().unwrap(),
+                    //Spawn paint and crop only if screenshot is already available
+                    if self.screenshot.is_some() {
+                        let crop_btn = ui.add(Button::new("Crop"));
+                        let paint_btn = ui.add(Button::new("Paint"));
+                        if crop_btn.clicked() {
+                            self.action = Action::Crop;
+                        }
+                        if paint_btn.clicked() {
+                            self.action = Action::Paint;
+                        }
+                    }
+                let mut selected = 0;
+                ComboBox::from_label("Select Display")
+                    .selected_text(format!("{:?}", self.display.unwrap()))
+                    .show_ui(ui, |ui| {
+                        for (i, display) in screen::display_list().into_iter().enumerate() {
+                            if ui
+                                .selectable_value(
+                                    &mut self.display.clone().unwrap(),
+                                    i,
+                                    format!(
+                                        "Display {} - {}x{} px",
                                         i,
-                                        format!(
-                                            "Display {} - {}x{} px",
-                                            i,
-                                            display.width(),
-                                            display.height()
-                                        ),
-                                    )
-                                    .clicked()
-                                {
-                                    selected = i;
-                                    println!("Selected : {}", selected);
-                                    self.display = Some(selected);
-                                }
+                                        display.width(),
+                                        display.height()
+                                    ),
+                                )
+                                .clicked()
+                            {
+                                selected = i;
+                                println!("Selected : {}", selected);
+                                self.display = Some(selected);
                             }
-                        });
-
-                    if crop_btn.clicked() {
-                        self.action = Action::Crop;
-                    }
-                    if paint_btn.clicked() {
-                        self.action = Action::Paint;
-                    }
+                        }
+                    });
+                }
+                else if self.action == Action::Crop {
+                    self.render_crop_tools(ui);
                 } else if self.action == Action::Crop {
                     let undo_crop_btn = ui.add(Button::new("Stop cropping"));
                     if undo_crop_btn.clicked() {
@@ -250,17 +329,7 @@ impl RustShot {
                         self.restore_from_crop();
                     }
                 } else if self.action == Action::Paint {
-                    let save_paint_btn = ui.add(Button::new("Save changes"));
-                    let undo_paint_btn = ui.add(Button::new("Undo changes"));
-                    if save_paint_btn.clicked() {
-                        self.action = Action::None;
-                        self.save_paint_changes();
-                    }
-                    if undo_paint_btn.clicked(){
-                        self.action = Action::None;
-                        self.restore_from_paint();
-                    }
-                
+                    self.render_paint_tools(ui);
                 }
             })
         });
@@ -282,7 +351,7 @@ impl RustShot {
                     if self.action == Action::Crop {
                         self.crop_logic(img);
                     } else if self.action == Action::Paint {
-                        self.paint_logic(img);
+                        self.paint_logic(ctx, img);
                     }
                 });
             }
@@ -290,6 +359,49 @@ impl RustShot {
                 ScrollArea::both().show(ui, |ui| ui.label("No screenshots yet"));
             }
         });
+    }
+
+    fn render_paint_tools(&mut self, ui: &mut Ui) {
+        ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+            let save_paint_btn = ui.add(Button::new("Save changes"));
+            let undo_paint_btn = ui.add(Button::new("Undo changes"));
+            let draw_btn = ui.add(Button::new("✏"));
+            let hollow_rect_btn = ui.add(Button::new("◻"));
+            let filled_rect_btn = ui.add(Button::new("◼"));
+            let hollow_circle_btn = ui.add(Button::new("⚪"));
+            let filled_circle_btn = ui.add(Button::new("⚫"));
+            ui.color_edit_button_srgb(&mut self.paint_info.curr_color);
+            if save_paint_btn.clicked() {
+                self.action = Action::None;
+                self.save_paint_changes();
+            }
+            if undo_paint_btn.clicked() {
+                self.restore_from_paint();
+            }
+            if draw_btn.clicked() {
+                self.paint_info.curr_tool = Tool::Drawing;
+            }
+            if hollow_rect_btn.clicked() {
+                self.paint_info.curr_tool = Tool::HollowRect;
+            }
+            if filled_rect_btn.clicked() {
+                self.paint_info.curr_tool = Tool::FilledRect;
+            }
+            if hollow_circle_btn.clicked() {
+                self.paint_info.curr_tool = Tool::HollowCircle;
+            }
+            if filled_circle_btn.clicked() {
+                self.paint_info.curr_tool = Tool::FilledCircle;
+            }
+        });
+    }
+
+    fn render_crop_tools(&mut self, ui: &mut Ui) {
+        let undo_crop_btn = ui.add(Button::new("Stop cropping"));
+        if undo_crop_btn.clicked() {
+            //To restore image without cropping rect
+            self.restore_from_crop();
+        }
     }
 
     /// Logic for cropping the image
@@ -325,6 +437,7 @@ impl RustShot {
                 height as u32,
             );
             self.screenshot = Some(DynamicImage::from(new_screen.clone()));
+            self.intermediate_screenshot = Some(DynamicImage::from(new_screen.clone()));
             self.final_screenshot = Some(DynamicImage::from(new_screen));
             self.action = Action::None;
         }
@@ -364,9 +477,9 @@ impl RustShot {
     }
 
     /// Logic for painting on the image
-    fn paint_logic(&mut self, img: Response) {
+    fn paint_logic(&mut self, ctx: &Context, img: Response) {
         if img.dragged() {
-            if !self.paint_info.painting{
+            if !self.paint_info.painting {
                 self.paint_info.painting = true;
                 self.paint_info.last_ptr = into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
             }
@@ -374,15 +487,18 @@ impl RustShot {
                 Some(pos) => into_relative_pos(pos, img.rect),
                 None => self.paint_info.last_ptr,
             };
-            //Draw a line between the last pointer and the current pointer
-            let new_screen = drawing::draw_line_segment(self.screenshot.as_ref().unwrap().as_rgb8().unwrap(),
-                                                        (self.paint_info.last_ptr.x, self.paint_info.last_ptr.y ),
-                                                        (self.paint_info.curr_ptr.x , self.paint_info.curr_ptr.y ),
-                                                        Rgb([255u8, 255u8, 255u8]));
-            self.paint_info.last_ptr = self.paint_info.curr_ptr;
+            let new_screen = match self.paint_info.draw_shape(self.intermediate_screenshot.as_ref().unwrap().as_rgb8().unwrap()) {
+                Some(screen) => screen,
+                None => self.screenshot.as_ref().unwrap().as_rgb8().unwrap().clone(),
+            };
+            if self.paint_info.curr_tool == Tool::Drawing {
+                self.paint_info.last_ptr = self.paint_info.curr_ptr;
+                self.intermediate_screenshot = Some(DynamicImage::from(new_screen.clone()));
+            }
             self.screenshot = Some(DynamicImage::from(new_screen));
-        } else if img.drag_released(){
-            self.paint_info.reset();
+        } else if img.drag_released() {
+            self.intermediate_screenshot = Some(DynamicImage::from(self.screenshot.as_ref().unwrap().clone()));
+            self.paint_info.soft_reset();
         }
     }
 }
@@ -396,7 +512,8 @@ impl App for RustShot {
                         //let color_image = ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes());
                         //self.screenshot = Some(RetainedImage::from_color_image("screenshot", color_image));
                         self.screenshot = Some(screenshot.clone());
-                        self.final_screenshot = Some(screenshot);
+                        self.intermediate_screenshot = Some(screenshot.clone());
+                self.final_screenshot = Some(screenshot);
             }
             Err(_) => {}
             }
