@@ -1,14 +1,16 @@
 use std::cmp::max;
 use crate::screen::{self, display_list, take_screenshot};
-use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, ImageButton, ImageData, Layout, Pos2, Rect, Response, ScrollArea, Sense, TopBottomPanel};
+use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, ImageButton, ImageData, Layout, Pos2, Rect, Response, ScrollArea, Sense, Shape, TopBottomPanel};
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
-use image::{DynamicImage, EncodableLayout, GenericImage, ImageBuffer, Rgb, Rgba};
+use image::{DynamicImage, EncodableLayout, GenericImage, ImageBuffer, Rgb, Rgba, RgbImage};
 use scrap::Display;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use eframe::egui::accesskit::Size;
+use eframe::egui::ImageData::Color;
 use imageproc::definitions::Image;
 use imageproc::drawing;
 use imageproc::drawing::Canvas;
@@ -47,7 +49,20 @@ enum Action {
     None,
 }
 
+#[derive(PartialEq, Eq)]
+enum Tool {
+    Drawing,
+    HollowRect,
+    FilledRect,
+    Arrow,
+    HollowCircle,
+    FilledCircle,
+    None,
+}
+
 struct PaintState {
+    curr_tool: Tool,
+    curr_color: Rgb<u8>,
     painting: bool,
     last_ptr: Pos2,
     curr_ptr: Pos2,
@@ -60,7 +75,48 @@ impl PaintState {
         self.last_ptr = Pos2::default();
         self.curr_ptr = Pos2::default();
     }
+
+    fn draw_shape(&self, img: &RgbImage) -> Option<Image<Rgb<u8>>> {
+        let mut start_ptr = self.last_ptr;
+        let width = max(1, (self.curr_ptr.x - self.last_ptr.x).abs() as i32);
+        let height = max(1, (self.curr_ptr.y - self.last_ptr.y).abs() as i32);
+        if self.curr_tool != Tool::Drawing || self.curr_tool != Tool::FilledCircle || self.curr_tool != Tool::HollowCircle {
+            //Permits an easier selection, allowing to generate the area in all directions
+            if self.curr_ptr.x < self.last_ptr.x {
+                start_ptr.x = self.curr_ptr.x;
+            }
+            if self.curr_ptr.y < self.last_ptr.y {
+                start_ptr.y = self.curr_ptr.y;
+            }
+        }
+        let mut new_screen = None;
+        match self.curr_tool {
+            Tool::Drawing => {
+                new_screen = Some(drawing::draw_line_segment(img, (start_ptr.x, start_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_color));
+            }
+            Tool::HollowRect => {
+                new_screen = Some(drawing::draw_hollow_rect(img,imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color));
+            }
+            Tool::FilledRect => {
+                new_screen = Some(drawing::draw_filled_rect(img,imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color));
+            }
+            Tool::HollowCircle => {
+                let radius = ((width.pow(2) + height.pow(2)) as f64).sqrt() as i32;
+                new_screen = Some(drawing::draw_hollow_circle(img, (start_ptr.x as i32, start_ptr.y as i32), radius, self.curr_color));
+            }
+            Tool::FilledCircle => {
+                let radius = ((width.pow(2) + height.pow(2)) as f64).sqrt() as i32;
+                new_screen = Some(drawing::draw_filled_circle(img, (start_ptr.x as i32, start_ptr.y as i32), radius, self.curr_color));
+            }
+            Tool::Arrow => {
+                new_screen = Some(drawing::draw_line_segment(img, (start_ptr.x, start_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_color));
+            }
+            _ => {}
+        }
+        return new_screen;
+    }
 }
+
 
 struct CropState {
     clicked: bool,
@@ -110,6 +166,8 @@ impl RustShot {
                 curr_ptr: Pos2::default(),
             },
             paint_info: PaintState {
+                curr_tool: Tool::None,
+                curr_color: Rgb([255u8, 255u8, 255u8]),
                 painting: false,
                 last_ptr: Pos2::default(),
                 curr_ptr: Pos2::default(),
@@ -325,16 +383,16 @@ impl RustShot {
                 Some(pos) => into_relative_pos(pos, img.rect),
                 None => self.paint_info.last_ptr,
             };
-            //Draw a line between the last pointer and the current pointer
-            let new_screen = drawing::draw_line_segment(self.screenshot.as_ref().unwrap().as_rgb8().unwrap(),
-                                                        (self.paint_info.last_ptr.x, self.paint_info.last_ptr.y ),
-                                                        (self.paint_info.curr_ptr.x , self.paint_info.curr_ptr.y ),
-                                                        Rgb([255u8, 255u8, 255u8]));
+            let new_screen = match self.paint_info.draw_shape(self.screenshot.as_ref().unwrap().as_rgb8().unwrap()) {
+                Some(screen) => screen,
+                None => self.screenshot.as_ref().unwrap().as_rgb8().unwrap().clone(),
+            };
             self.paint_info.last_ptr = self.paint_info.curr_ptr;
             self.screenshot = Some(DynamicImage::from(new_screen));
         } else if img.drag_released(){
             self.paint_info.reset();
         }
+
     }
 }
 
