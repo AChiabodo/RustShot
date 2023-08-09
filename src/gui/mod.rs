@@ -1,7 +1,7 @@
 use crate::screen::{self, display_list, take_screenshot};
 use eframe::egui::{
     Align, Button, CentralPanel, ColorImage, ComboBox, Context, ImageButton, ImageData, Layout,
-    Pos2, Rect, Response, ScrollArea, Sense, TopBottomPanel, Window, Key, KeyboardShortcut, Modifiers,
+    Pos2, Rect, Response, ScrollArea, Sense, TopBottomPanel, Window, Key, KeyboardShortcut, Modifiers, InputState,
 };
 use eframe::epaint::Color32;
 use eframe::{run_native, NativeOptions};
@@ -50,10 +50,16 @@ enum Action {
     Paint,
     None,
 }
+#[derive(PartialEq, Eq, PartialOrd, Ord,Hash)]
 enum KeyCommand {
     SaveScreenshot,
     TakeScreenshot,
     None    
+}
+enum Message {
+    Shortcut(KeyCommand),
+    Screenshot(DynamicImage),
+    None
 }
 
 struct PaintState {
@@ -92,14 +98,16 @@ struct RustShot {
     screenshot: Option<DynamicImage>,
     final_screenshot: Option<DynamicImage>,
     display: Option<usize>,
-    receiver: Receiver<DynamicImage>,
-    sender: Sender<DynamicImage>,
+    receiver: Receiver<Message>,
+    sender: Sender<Message>,
     crop_info: CropState,
     paint_info: PaintState,
     action: Action,
     show_confirmation_dialog: bool,
     allowed_to_close: bool,
-    shortcuts : HashMap<KeyboardShortcut,KeyCommand>
+    shortcuts : HashMap<KeyCommand,KeyboardShortcut>,
+    thread_running : bool,
+    command : KeyCommand
 }
 
 impl RustShot {
@@ -109,6 +117,9 @@ impl RustShot {
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
         let (tx, rx) = channel();
+        let mut map = HashMap::new();
+        map.insert( KeyCommand::SaveScreenshot,KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::S });
+        map.insert(KeyCommand::TakeScreenshot,KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::T });
         RustShot {
             screenshot: None,
             final_screenshot: None,
@@ -129,7 +140,9 @@ impl RustShot {
             action: Action::None,
             allowed_to_close: true,
             show_confirmation_dialog: false,
-            shortcuts : HashMap::new()
+            shortcuts : map,
+            thread_running : false,
+            command : KeyCommand::None
         }
     }
     /// Used to restore state of the application when stopping the crop action for some reason
@@ -160,8 +173,9 @@ impl RustShot {
                     let screenshot_save_btn = ui.add(Button::new("Save Screenshot"));
                     let crop_btn = ui.add(Button::new("Crop"));
                     let paint_btn = ui.add(Button::new("Paint"));
-                    if screenshot_btn.clicked() {
+                    if screenshot_btn.clicked() || self.command == KeyCommand::TakeScreenshot {
                         //Hide the application window
+                        self.command = KeyCommand::None;
                         self.allowed_to_close = false;
                         frame.set_visible(false);
                         let tx = self.sender.clone();
@@ -174,15 +188,15 @@ impl RustShot {
                             let current_display = select_display(value as usize)
                                 .expect("Cannot select the correct display");
                             let screenshot = take_screenshot(current_display).unwrap();
-                            match tx.send(screenshot) {
+                            match tx.send(Message::Screenshot(screenshot)) {
                                 //Force update() to be called again, so that the application window is made visible again. (when it's not visible otherwise update won't be called)
                                 Ok(_) => c.request_repaint(),
                                 Err(err) => println!("{}", err),
                             }
                         });
                     }
-
-                    if screenshot_save_btn.clicked() {
+                    
+                    if screenshot_save_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::SaveScreenshot).unwrap())) {
                         match &self.screenshot {
                             Some(screenshot) => {
                                 let path =
@@ -206,6 +220,7 @@ impl RustShot {
                             None => {}
                         }
                     }
+                    
                     let mut selected = 0;
                     ComboBox::from_label("Select Display")
                         .selected_text(format!("{:?}", self.display.unwrap()))
@@ -383,17 +398,44 @@ impl RustShot {
 
 impl App for RustShot {
     fn update(&mut self, ctx: &Context, frame: &mut Frame) {
-        match self.receiver.try_recv() {
-            Ok(screenshot) => {
-                //Show the application window again
-                frame.set_visible(true);
-                //let color_image = ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes());
-                //self.screenshot = Some(RetainedImage::from_color_image("screenshot", color_image));
-                self.screenshot = Some(screenshot.clone());
-                self.final_screenshot = Some(screenshot);
-            }
-            Err(err) => (),
+
+        if !self.thread_running {
+            let temp = self.sender.clone();
+            let context = ctx.clone();
+            self.thread_running = true;
+            thread::spawn(move || {
+                println!("Partito : {:?}",&context);
+                loop {
+                    if context.input_mut(|i| i.consume_shortcut(&KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::T })){
+                        println!("Messaggio");
+                        match temp.send(Message::Shortcut(KeyCommand::TakeScreenshot)) {
+                            Ok(_) => {},
+                            Err(_) => {}
+                        }
+                    }
+                }
+            });
         }
+
+        match self.receiver.try_recv() {
+            Ok(message) => {
+                match message {
+                    Message::Screenshot(screenshot) => {
+                        //Show the application window again
+                        frame.set_visible(true);
+                        //let color_image = ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes());
+                        //self.screenshot = Some(RetainedImage::from_color_image("screenshot", color_image));
+                        self.screenshot = Some(screenshot.clone());
+                        self.final_screenshot = Some(screenshot);
+                    }
+                    Message::Shortcut(shortcut) => {
+                        self.command = shortcut;
+                    },
+                    Message::None => {} 
+                }
+            }
+            Err(_) => {}
+            }
         self.render_top_panel(ctx, frame);
         self.render_central_panel(ctx, frame);
         if self.show_confirmation_dialog {
@@ -421,6 +463,7 @@ impl App for RustShot {
         }
         self.allowed_to_close
     }
+
 }
 pub fn main_window() -> eframe::Result<()> {
     let window_option = NativeOptions::default();
