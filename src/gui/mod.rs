@@ -15,7 +15,7 @@ use imageproc::definitions::Image;
 use imageproc::drawing;
 use imageproc::drawing::Canvas;
 use imageproc::point::Point;
-
+use rfd::FileDialog;
 
 fn select_display(index: usize) -> Option<Display> {
     let mut iter = screen::display_list().into_iter().enumerate();
@@ -226,7 +226,13 @@ impl RustShot {
                         match &self.screenshot {
                             Some(screenshot) => {
                                 let path =
-                                    tinyfiledialogs::save_file_dialog("Select save location", "./");
+                                    //tinyfiledialogs::save_file_dialog("Select save location", "./");
+                                    FileDialog::new().add_filter("PNG", &["png"])
+                                    .add_filter("JPG", &["jpg"]).add_filter("GIF", &["gif"])
+                                    .add_filter("WEBP", &["WEBP"]) //ToDelete? 
+                                    .add_filter("BMP", &["Bmp"])
+                                    .set_directory("./")
+                                    .save_file();
                                 match path {
                                     Some(path) => {
                                         match image::save_buffer(
