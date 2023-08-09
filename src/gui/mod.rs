@@ -1,7 +1,7 @@
 use crate::screen::{self, display_list, take_screenshot};
 use eframe::egui::{
     Align, Button, CentralPanel, ColorImage, ComboBox, Context, ImageButton, ImageData, Layout,
-    Pos2, Rect, Response, ScrollArea, Sense, TopBottomPanel, Window, Key,
+    Pos2, Rect, Response, ScrollArea, Sense, TopBottomPanel, Window, Key, KeyboardShortcut, Modifiers,
 };
 use eframe::epaint::Color32;
 use eframe::{run_native, NativeOptions};
@@ -14,6 +14,7 @@ use imageproc::drawing::Canvas;
 use imageproc::point::Point;
 use scrap::Display;
 use std::cmp::max;
+use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
@@ -48,6 +49,11 @@ enum Action {
     Crop,
     Paint,
     None,
+}
+enum KeyCommand {
+    SaveScreenshot,
+    TakeScreenshot,
+    None    
 }
 
 struct PaintState {
@@ -85,6 +91,7 @@ struct RustShot {
     action: Action,
     show_confirmation_dialog: bool,
     allowed_to_close: bool,
+    shortcuts : HashMap<KeyboardShortcut,KeyCommand>
 }
 
 impl RustShot {
@@ -115,6 +122,7 @@ impl RustShot {
             action: Action::None,
             allowed_to_close: true,
             show_confirmation_dialog: false,
+            shortcuts : HashMap::new()
         }
     }
     /// Used to restore state of the application when stopping the crop action for some reason
@@ -154,7 +162,7 @@ impl RustShot {
                         });
                     }
 
-                    if screenshot_save_btn.clicked() ||  ctx.input(|i| i.key_pressed(Key::F1)) {
+                    if screenshot_save_btn.clicked() {
                         match &self.screenshot {
                             Some(screenshot) => {
                                 let path =
