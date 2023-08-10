@@ -65,6 +65,8 @@ enum Tool {
 enum KeyCommand {
     SaveScreenshot,
     TakeScreenshot,
+    Crop,
+    Paint,
     None    
 }
 
@@ -178,6 +180,8 @@ impl RustShot {
         let mut map = HashMap::new();
         map.insert( KeyCommand::SaveScreenshot,KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::S });
         map.insert(KeyCommand::TakeScreenshot,KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::T });
+        map.insert(KeyCommand::Crop,KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::C });
+        map.insert(KeyCommand::Paint,KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::P });
         RustShot {
             screenshot: None,
             final_screenshot: None,
@@ -288,10 +292,10 @@ impl RustShot {
                     if self.screenshot.is_some() {
                         let crop_btn = ui.add(Button::new("Crop"));
                         let paint_btn = ui.add(Button::new("Paint"));
-                        if crop_btn.clicked() {
+                        if crop_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::Crop).unwrap())) {
                             self.action = Action::Crop;
                         }
-                        if paint_btn.clicked() {
+                        if paint_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::Paint).unwrap())) {
                             self.action = Action::Paint;
                         }
                     }
@@ -324,7 +328,7 @@ impl RustShot {
                     self.render_crop_tools(ui);
                 } else if self.action == Action::Crop {
                     let undo_crop_btn = ui.add(Button::new("Stop cropping"));
-                    if undo_crop_btn.clicked() {
+                    if undo_crop_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::Crop).unwrap()))  {
                         //To restore image without cropping rect
                         self.restore_from_crop();
                     }
