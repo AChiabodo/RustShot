@@ -325,29 +325,7 @@ impl RustShot {
                     if screenshot_save_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::SaveScreenshot).unwrap())) {
                         match &self.screenshot {
                             Some(screenshot) => {
-                                let path =
-                                    //tinyfiledialogs::save_file_dialog("Select save location", "./screen.jpg");
-                                    FileDialog::new().add_filter("PNG", &["png"])
-                                        .add_filter("JPG", &["jpg"]).add_filter("GIF", &["gif"])
-                                        .add_filter("WEBP", &["WEBP"]) //ToDelete?
-                                        .add_filter("BMP", &["Bmp"])
-                                        .set_directory("./")
-                                        .save_file();
-                                match path {
-                                    Some(path) => {
-                                        match image::save_buffer(
-                                            path,
-                                            &screenshot.as_bytes(),
-                                            screenshot.width() as u32,
-                                            screenshot.height() as u32,
-                                            image::ColorType::Rgb8,
-                                        ) {
-                                            Ok(_) => println!("Screenshot saved"),
-                                            Err(err) => println!("{}", err),
-                                        }
-                                    }
-                                    None => {}
-                                }
+                                save_screenshot(screenshot);
                             }
                             None => {}
                         }
@@ -363,38 +341,10 @@ impl RustShot {
                             self.action = Action::Paint;
                         }
                     }
-                    let mut selected = 0;
-                    ComboBox::from_label("Select Display")
-                        .selected_text(format!("{:?}", self.display.unwrap()))
-                        .show_ui(ui, |ui| {
-                            for (i, display) in screen::display_list().into_iter().enumerate() {
-                                if ui
-                                    .selectable_value(
-                                        &mut self.display.clone().unwrap(),
-                                        i,
-                                        format!(
-                                            "Display {} - {}x{} px",
-                                            i,
-                                            display.width(),
-                                            display.height()
-                                        ),
-                                    )
-                                    .clicked()
-                                {
-                                    selected = i;
-                                    println!("Selected : {}", selected);
-                                    self.display = Some(selected);
-                                }
-                            }
-                        });
+                    self.display_selector(ui);
+
                 } else if self.action == Action::Crop {
                     self.render_crop_tools(ui);
-                } else if self.action == Action::Crop {
-                    let undo_crop_btn = ui.add(Button::new("Stop cropping"));
-                    if undo_crop_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::Crop).unwrap())) {
-                        //To restore image without cropping rect
-                        self.restore_from_crop();
-                    }
                 } else if self.action == Action::Paint {
                     self.render_paint_tools(ctx, ui);
                 }
@@ -437,6 +387,33 @@ impl RustShot {
                                         });
             })
         });
+    }
+
+    fn display_selector(&mut self, ui: &mut Ui) {
+        let mut selected = 0;
+        ComboBox::from_label("Select Display")
+            .selected_text(format!("{:?}", self.display.unwrap()))
+            .show_ui(ui, |ui| {
+                for (i, display) in screen::display_list().into_iter().enumerate() {
+                    if ui
+                        .selectable_value(
+                            &mut self.display.clone().unwrap(),
+                            i,
+                            format!(
+                                "Display {} - {}x{} px",
+                                i,
+                                display.width(),
+                                display.height()
+                            ),
+                        )
+                        .clicked()
+                    {
+                        selected = i;
+                        println!("Selected : {}", selected);
+                        self.display = Some(selected);
+                    }
+                }
+            });
     }
 
     fn render_central_panel(&mut self, ctx: &Context, frame: &mut Frame) {
@@ -670,6 +647,32 @@ impl RustShot {
             Tool::None => {}
             _ => { img.on_hover_cursor(CursorIcon::Crosshair); }
         }
+    }
+}
+
+fn save_screenshot(screenshot: &DynamicImage) {
+    let path =
+        //tinyfiledialogs::save_file_dialog("Select save location", "./screen.jpg");
+        FileDialog::new().add_filter("PNG", &["png"])
+            .add_filter("JPG", &["jpg"]).add_filter("GIF", &["gif"])
+            .add_filter("WEBP", &["WEBP"]) //ToDelete?
+            .add_filter("BMP", &["Bmp"])
+            .set_directory("./")
+            .save_file();
+    match path {
+        Some(path) => {
+            match image::save_buffer(
+                path,
+                &screenshot.as_bytes(),
+                screenshot.width() as u32,
+                screenshot.height() as u32,
+                image::ColorType::Rgb8,
+            ) {
+                Ok(_) => println!("Screenshot saved"),
+                Err(err) => println!("{}", err),
+            }
+        }
+        None => {}
     }
 }
 
