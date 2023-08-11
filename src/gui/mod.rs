@@ -300,26 +300,7 @@ impl RustShot {
                     let screenshot_save_btn = ui.add(Button::new("Save Screenshot"));
 
                     if screenshot_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::TakeScreenshot).unwrap())) {
-                        //Hide the application window
-                        self.allowed_to_close = false;
-                        frame.set_visible(false);
-                        let tx = self.sender.clone();
-                        let c = ctx.clone();
-                        let timer = self.timer.unwrap().clone();
-                        let value = self.display.unwrap().clone();
-                        println!("Display : {}", value);
-                        //Thread that manages screenshots
-                        thread::spawn(move || {
-                            thread::sleep(Duration::from_millis(timer*1000 + 300));
-                            let current_display = select_display(value as usize)
-                                .expect("Cannot select the correct display");
-                            let screenshot = take_screenshot(current_display).unwrap();
-                            match tx.send(screenshot) {
-                                //Force update() to be called again, so that the application window is made visible again. (when it's not visible otherwise update won't be called)
-                                Ok(_) => c.request_repaint(),
-                                Err(err) => println!("{}", err),
-                            }
-                        });
+                        self.store_screenshot(frame, ctx);
                     }
 
                     if screenshot_save_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::SaveScreenshot).unwrap())) {
@@ -386,6 +367,29 @@ impl RustShot {
                         ui.selectable_value(&mut self.timer, Some(10), "🕓 10 sec");
                                         });
             })
+        });
+    }
+
+    fn store_screenshot(&mut self, frame: &mut Frame, ctx: &Context) {
+        //Hide the application window
+        self.allowed_to_close = false;
+        frame.set_visible(false);
+        let tx = self.sender.clone();
+        let c = ctx.clone();
+        let timer = self.timer.unwrap().clone();
+        let value = self.display.unwrap().clone();
+        println!("Display : {}", value);
+        //Thread that manages screenshots
+        thread::spawn(move || {
+            thread::sleep(Duration::from_millis(timer*1000 + 300));
+            let current_display = select_display(value as usize)
+                .expect("Cannot select the correct display");
+            let screenshot = take_screenshot(current_display).unwrap();
+            match tx.send(screenshot) {
+                //Force update() to be called again, so that the application window is made visible again. (when it's not visible otherwise update won't be called)
+                Ok(_) => c.request_repaint(),
+                Err(err) => println!("{}", err),
+            }
         });
     }
 
