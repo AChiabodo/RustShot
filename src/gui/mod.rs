@@ -424,6 +424,7 @@ impl RustShot {
                         ui.selectable_value(&mut self.timer, Some(5), "🕓 5 sec");
                         ui.selectable_value(&mut self.timer, Some(10), "🕓 10 sec");
                     });
+                    self.display_selector(ui);
                     if screenshot_btn.clicked()
                         || ctx.input_mut(|i| {
                             i.consume_shortcut(
@@ -448,6 +449,7 @@ impl RustShot {
                             None => {}
                         }
                     }
+                    
                     //Spawn paint and crop only if screenshot is already available
                     if self.screenshot.is_some() {
                         let crop_btn = ui.add(Button::new("Crop"));
@@ -471,7 +473,7 @@ impl RustShot {
                             self.copy_image();
                         }
                     }
-                    self.display_selector(ui);
+                    
                 } else if self.action == Action::Crop {
                     self.render_crop_tools(ui);
                 } else if self.action == Action::Paint {
@@ -506,8 +508,8 @@ impl RustShot {
 
     fn display_selector(&mut self, ui: &mut Ui) {
         let mut selected = 0;
-        ComboBox::from_label("Select Display")
-            .selected_text(format!("{:?}", self.display.unwrap()))
+        ComboBox::from_id_source(0)
+            .selected_text(format!("Display {:?}", self.display.unwrap()))
             .show_ui(ui, |ui| {
                 for (i, display) in screen::display_list().into_iter().enumerate() {
                     if ui
