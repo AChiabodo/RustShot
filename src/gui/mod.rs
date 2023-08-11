@@ -1,22 +1,25 @@
 use crate::screen::{self, take_screenshot};
-use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, ImageButton, KeyboardShortcut, Layout, Pos2, Rect, Response, ScrollArea, Sense, Shape, TopBottomPanel, Window, Key, Modifiers, InputState, Ui, TextureId, Label, CursorIcon, Vec2};
+use eframe::egui::{
+    Align, Button, CentralPanel, ColorImage, ComboBox, Context, CursorIcon, ImageButton,
+    InputState, Key, KeyboardShortcut, Label, Layout, Modifiers, Pos2, Rect, Response, ScrollArea,
+    Sense, Shape, TextureId, TopBottomPanel, Ui, Vec2, Window,
+};
 
+use arboard::Clipboard;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
-use image::{DynamicImage, Rgb, Rgba, RgbImage};
+use image::{DynamicImage, Rgb, RgbImage, Rgba};
 use imageproc::definitions::Image;
 use imageproc::drawing;
+use rfd::FileDialog;
 use scrap::Display;
+use std::borrow::Cow;
 use std::cmp::max;
 use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use rfd::FileDialog;
-use std::borrow::Cow;
-use arboard::Clipboard;
-
 
 fn select_display(index: usize) -> Option<Display> {
     let mut iter = screen::display_list().into_iter().enumerate();
@@ -120,7 +123,12 @@ impl PaintState {
             let end_x = ending_point.0 + nx * offset;
             let end_y = ending_point.1 + ny * offset;
             // draw the brush stroke
-            drawing::draw_line_segment_mut(&mut new_screen, (start_x, start_y), (end_x, end_y), self.curr_color.into());
+            drawing::draw_line_segment_mut(
+                &mut new_screen,
+                (start_x, start_y),
+                (end_x, end_y),
+                self.curr_color.into(),
+            );
         }
         return new_screen;
     }
@@ -130,7 +138,10 @@ impl PaintState {
         let mut start_ptr = self.last_ptr;
         let width = max(1, (self.curr_ptr.x - self.last_ptr.x).abs() as i32);
         let height = max(1, (self.curr_ptr.y - self.last_ptr.y).abs() as i32);
-        if self.curr_tool != Tool::Drawing && self.curr_tool != Tool::FilledCircle && self.curr_tool != Tool::HollowCircle {
+        if self.curr_tool != Tool::Drawing
+            && self.curr_tool != Tool::FilledCircle
+            && self.curr_tool != Tool::HollowCircle
+        {
             //Permits an easier selection, allowing to generate the area in all directions
             if self.curr_ptr.x < self.last_ptr.x {
                 start_ptr.x = self.curr_ptr.x;
@@ -145,28 +156,52 @@ impl PaintState {
                 new_screen = Some(self.draw_thick_line(img, 5.));
             }
             Tool::HollowRect => {
-                new_screen = Some(drawing::draw_hollow_rect(img, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color.into()));
+                new_screen = Some(drawing::draw_hollow_rect(
+                    img,
+                    imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32)
+                        .of_size(width as u32, height as u32),
+                    self.curr_color.into(),
+                ));
             }
             Tool::FilledRect => {
-                new_screen = Some(drawing::draw_filled_rect(img, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color.into()));
+                new_screen = Some(drawing::draw_filled_rect(
+                    img,
+                    imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32)
+                        .of_size(width as u32, height as u32),
+                    self.curr_color.into(),
+                ));
             }
             Tool::HollowCircle => {
                 let radius = ((width.pow(2) + height.pow(2)) as f64).sqrt() as i32;
-                new_screen = Some(drawing::draw_hollow_circle(img, (start_ptr.x as i32, start_ptr.y as i32), radius, self.curr_color.into()));
+                new_screen = Some(drawing::draw_hollow_circle(
+                    img,
+                    (start_ptr.x as i32, start_ptr.y as i32),
+                    radius,
+                    self.curr_color.into(),
+                ));
             }
             Tool::FilledCircle => {
                 let radius = ((width.pow(2) + height.pow(2)) as f64).sqrt() as i32;
-                new_screen = Some(drawing::draw_filled_circle(img, (start_ptr.x as i32, start_ptr.y as i32), radius, self.curr_color.into()));
+                new_screen = Some(drawing::draw_filled_circle(
+                    img,
+                    (start_ptr.x as i32, start_ptr.y as i32),
+                    radius,
+                    self.curr_color.into(),
+                ));
             }
             Tool::Arrow => {
-                new_screen = Some(drawing::draw_line_segment(img, (start_ptr.x, start_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_color.into()));
+                new_screen = Some(drawing::draw_line_segment(
+                    img,
+                    (start_ptr.x, start_ptr.y),
+                    (self.curr_ptr.x, self.curr_ptr.y),
+                    self.curr_color.into(),
+                ));
             }
             _ => {}
         }
         return new_screen;
     }
 }
-
 
 struct CropState {
     clicked: bool,
@@ -185,7 +220,6 @@ impl CropState {
     }
 }
 
-
 struct RustShot {
     screenshot: Option<DynamicImage>,
     intermediate_screenshot: Option<DynamicImage>,
@@ -196,7 +230,7 @@ struct RustShot {
     crop_info: CropState,
     paint_info: PaintState,
     action: Action,
-    timer : Option<u64>,
+    timer: Option<u64>,
     show_confirmation_dialog: bool,
     allowed_to_close: bool,
     shortcuts: HashMap<KeyCommand, KeyboardShortcut>,
@@ -205,28 +239,69 @@ struct RustShot {
 }
 
 /// Load in the application state the svg icons as RetainedImage, and also the correspondence between the backend name of the icon and its tooltip.
-fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<String, String>) {
+fn load_icons() -> (
+    HashMap<String, Result<RetainedImage, String>>,
+    HashMap<String, String>,
+) {
     let mut icons_map = HashMap::new();
     let mut tooltips_map = HashMap::new();
-    icons_map.insert("pencil-fill".to_string(), RetainedImage::from_svg_bytes("pencil-fill", include_bytes!("../../resources/pencil-fill.svg")));
+    icons_map.insert(
+        "pencil-fill".to_string(),
+        RetainedImage::from_svg_bytes(
+            "pencil-fill",
+            include_bytes!("../../resources/pencil-fill.svg"),
+        ),
+    );
     tooltips_map.insert("pencil-fill".to_string(), "Pencil".to_string());
-    icons_map.insert("square-fill".to_string(), RetainedImage::from_svg_bytes("square-fill", include_bytes!("../../resources/square-fill.svg")));
+    icons_map.insert(
+        "square-fill".to_string(),
+        RetainedImage::from_svg_bytes(
+            "square-fill",
+            include_bytes!("../../resources/square-fill.svg"),
+        ),
+    );
     tooltips_map.insert("square-fill".to_string(), "Filled Rectangle".to_string());
-    icons_map.insert("square".to_string(), RetainedImage::from_svg_bytes("square", include_bytes!("../../resources/square.svg")));
+    icons_map.insert(
+        "square".to_string(),
+        RetainedImage::from_svg_bytes("square", include_bytes!("../../resources/square.svg")),
+    );
     tooltips_map.insert("square".to_string(), "Hollow Rectangle".to_string());
-    icons_map.insert("circle-fill".to_string(), RetainedImage::from_svg_bytes("circle-fill", include_bytes!("../../resources/circle-fill.svg")));
+    icons_map.insert(
+        "circle-fill".to_string(),
+        RetainedImage::from_svg_bytes(
+            "circle-fill",
+            include_bytes!("../../resources/circle-fill.svg"),
+        ),
+    );
     tooltips_map.insert("circle-fill".to_string(), "Filled Circle".to_string());
-    icons_map.insert("circle".to_string(), RetainedImage::from_svg_bytes("circle", include_bytes!("../../resources/circle.svg")));
+    icons_map.insert(
+        "circle".to_string(),
+        RetainedImage::from_svg_bytes("circle", include_bytes!("../../resources/circle.svg")),
+    );
     tooltips_map.insert("circle".to_string(), "Hollow Circle".to_string());
-    icons_map.insert("arrow-up-right".to_string(), RetainedImage::from_svg_bytes("arrow-up-right", include_bytes!("../../resources/arrow-up-right.svg")));
+    icons_map.insert(
+        "arrow-up-right".to_string(),
+        RetainedImage::from_svg_bytes(
+            "arrow-up-right",
+            include_bytes!("../../resources/arrow-up-right.svg"),
+        ),
+    );
     tooltips_map.insert("arrow-up-right".to_string(), "Arrow".to_string());
-    icons_map.insert("eraser-fill".to_string(), RetainedImage::from_svg_bytes("eraser-fill", include_bytes!("../../resources/eraser-fill.svg")));
+    icons_map.insert(
+        "eraser-fill".to_string(),
+        RetainedImage::from_svg_bytes(
+            "eraser-fill",
+            include_bytes!("../../resources/eraser-fill.svg"),
+        ),
+    );
     tooltips_map.insert("eraser-fill".to_string(), "Eraser".to_string());
-    icons_map.insert("x-octagon".to_string(), RetainedImage::from_svg_bytes("x-octagon", include_bytes!("../../resources/x-octagon.svg")));
+    icons_map.insert(
+        "x-octagon".to_string(),
+        RetainedImage::from_svg_bytes("x-octagon", include_bytes!("../../resources/x-octagon.svg")),
+    );
     tooltips_map.insert("x-octagon".to_string(), "Stop using this tool".to_string());
     return (icons_map, tooltips_map);
 }
-
 
 impl RustShot {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -236,10 +311,34 @@ impl RustShot {
         // for e.g. egui::PaintCallback.
         let (tx, rx) = channel();
         let mut map = HashMap::new();
-        map.insert(KeyCommand::SaveScreenshot, KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::S });
-        map.insert(KeyCommand::TakeScreenshot, KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::T });
-        map.insert(KeyCommand::Crop, KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::C });
-        map.insert(KeyCommand::Paint, KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::P });
+        map.insert(
+            KeyCommand::SaveScreenshot,
+            KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                key: Key::S,
+            },
+        );
+        map.insert(
+            KeyCommand::TakeScreenshot,
+            KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                key: Key::T,
+            },
+        );
+        map.insert(
+            KeyCommand::Crop,
+            KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                key: Key::C,
+            },
+        );
+        map.insert(
+            KeyCommand::Paint,
+            KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                key: Key::P,
+            },
+        );
         let (icons_map, tooltips_map) = load_icons();
         RustShot {
             screenshot: None,
@@ -262,13 +361,12 @@ impl RustShot {
                 curr_ptr: Pos2::default(),
             },
             action: Action::None,
-            timer : Some(0),
+            timer: Some(0),
             allowed_to_close: true,
             show_confirmation_dialog: false,
             shortcuts: map,
             icons: icons_map,
             tooltips: tooltips_map,
-            
         }
     }
     /// Used to restore state of the application when stopping the crop action for some reason
@@ -292,14 +390,47 @@ impl RustShot {
         self.final_screenshot = self.screenshot.clone();
     }
 
+    fn copy_image(&mut self) {
+        let mut clipboard = Clipboard::new().unwrap();
+        let bytes = self.screenshot.as_ref().unwrap().as_bytes();
+        let mut rgba: Vec<u8> = Vec::new();
+        for i in 0..bytes.len() {
+            if i % 3 == 0 && i != 0 {
+                rgba.push(255 as u8);
+            }
+            rgba.push(bytes[i]);
+        }
+        rgba.push(255);
+        let img = arboard::ImageData {
+            width: self.screenshot.as_ref().unwrap().width() as usize,
+            height: self.screenshot.as_ref().unwrap().height() as usize,
+            bytes: Cow::from(rgba.as_slice()),
+        };
+        let done = clipboard.set_image(img);
+    }
+
     fn render_top_panel(&mut self, ctx: &Context, frame: &mut Frame) {
         TopBottomPanel::top("top panel").show(ctx, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 if self.action == Action::None {
                     let screenshot_btn = ui.add(Button::new("Take Screenshot"));
                     let screenshot_save_btn = ui.add(Button::new("Save Screenshot"));
-
-                    if screenshot_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::TakeScreenshot).unwrap())) {
+                    let combo_box = ComboBox::from_label("")
+                    .width(80.0)
+                    .selected_text(format!("🕓 {:?} sec", self.timer.unwrap()))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.timer, Some(0), "🕓 0 sec");
+                        ui.selectable_value(&mut self.timer, Some(2), "🕓 2 sec");
+                        ui.selectable_value(&mut self.timer, Some(5), "🕓 5 sec");
+                        ui.selectable_value(&mut self.timer, Some(10), "🕓 10 sec");
+                    });
+                    if screenshot_btn.clicked()
+                        || ctx.input_mut(|i| {
+                            i.consume_shortcut(
+                                self.shortcuts.get(&KeyCommand::TakeScreenshot).unwrap(),
+                            )
+                        })
+                    {
                         //Hide the application window
                         self.allowed_to_close = false;
                         frame.set_visible(false);
@@ -310,7 +441,7 @@ impl RustShot {
                         println!("Display : {}", value);
                         //Thread that manages screenshots
                         thread::spawn(move || {
-                            thread::sleep(Duration::from_millis(timer*1000 + 300));
+                            thread::sleep(Duration::from_millis(timer * 1000 + 300));
                             let current_display = select_display(value as usize)
                                 .expect("Cannot select the correct display");
                             let screenshot = take_screenshot(current_display).unwrap();
@@ -322,7 +453,13 @@ impl RustShot {
                         });
                     }
 
-                    if screenshot_save_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::SaveScreenshot).unwrap())) {
+                    if screenshot_save_btn.clicked()
+                        || ctx.input_mut(|i| {
+                            i.consume_shortcut(
+                                self.shortcuts.get(&KeyCommand::SaveScreenshot).unwrap(),
+                            )
+                        })
+                    {
                         match &self.screenshot {
                             Some(screenshot) => {
                                 save_screenshot(screenshot);
@@ -334,57 +471,31 @@ impl RustShot {
                     if self.screenshot.is_some() {
                         let crop_btn = ui.add(Button::new("Crop"));
                         let paint_btn = ui.add(Button::new("Paint"));
-                        if crop_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::Crop).unwrap())) {
+                        let copy_btn = ui.add(Button::new("Copy"));
+                        if crop_btn.clicked()
+                            || ctx.input_mut(|i| {
+                                i.consume_shortcut(self.shortcuts.get(&KeyCommand::Crop).unwrap())
+                            })
+                        {
                             self.action = Action::Crop;
                         }
-                        if paint_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::Paint).unwrap())) {
+                        if paint_btn.clicked()
+                            || ctx.input_mut(|i| {
+                                i.consume_shortcut(self.shortcuts.get(&KeyCommand::Paint).unwrap())
+                            })
+                        {
                             self.action = Action::Paint;
+                        }
+                        if copy_btn.clicked() {
+                            self.copy_image();
                         }
                     }
                     self.display_selector(ui);
-
                 } else if self.action == Action::Crop {
                     self.render_crop_tools(ui);
                 } else if self.action == Action::Paint {
                     self.render_paint_tools(ctx, ui);
                 }
-                let copy_btn = ui.add(Button::new("Copy"));
-                    if copy_btn.clicked() && self.screenshot.is_some(){
-
-                        let mut clipboard = Clipboard::new().unwrap();
-                        let bytes = self.screenshot.as_ref().unwrap().as_bytes();
-                        let mut rgba:Vec<u8> = Vec::new();
-                        for i in 0..bytes.len() 
-                        {
-                            
-                            if i%3==0 && i!=0 
-                            {
-                                rgba.push(255 as u8);
-                            }
-                            rgba.push(bytes[i]);
-
-                        }       
-                        rgba.push(255);     
-                        let img = arboard::ImageData {
-                            width: self.screenshot.as_ref().unwrap().width() as usize,
-                            height: self.screenshot.as_ref().unwrap().height() as usize,
-                            bytes: Cow::from(rgba.as_slice()),
-                        };
-                        let done = clipboard.set_image(img);
-                        match done 
-                        {
-                            Ok(_) => println!("Copiato"),
-                            Err(_) => println!("Non copiato"),
-                        }
-                    }
-                    let combo_box = ComboBox::from_label("").width(80.0)
-                    .selected_text(format!("🕓 {:?} sec", self.timer.unwrap()))
-                    .show_ui(ui, |ui| {
-                        ui.selectable_value(&mut self.timer, Some(0), "🕓 0 sec");
-                        ui.selectable_value(&mut self.timer, Some(2), "🕓 2 sec");
-                        ui.selectable_value(&mut self.timer, Some(5), "🕓 5 sec");
-                        ui.selectable_value(&mut self.timer, Some(10), "🕓 10 sec");
-                                        });
             })
         });
     }
@@ -428,7 +539,11 @@ impl RustShot {
                             screenshot.as_bytes(),
                         ),
                     );
-                    let img = ui.add(ImageButton::new(retained_img.texture_id(ctx), retained_img.size_vec2()).frame(false).sense(Sense::click_and_drag()));
+                    let img = ui.add(
+                        ImageButton::new(retained_img.texture_id(ctx), retained_img.size_vec2())
+                            .frame(false)
+                            .sense(Sense::click_and_drag()),
+                    );
                     if self.action == Action::Crop {
                         self.crop_logic(img);
                     } else if self.action == Action::Paint {
@@ -445,38 +560,26 @@ impl RustShot {
     /// Renders an ImageButton using the svg corresponding to the given name, if the svg failed to load or the name does not correspond to any svg, it spawns a button with the name passed as parameter to icon_button
     fn icon_button(&mut self, name: &str, ctx: &Context, ui: &mut Ui) -> Response {
         match self.icons.get(name) {
-            Some(val) => {
-                match val {
-                    Ok(image) => {
-                        ui.add(ImageButton::new(image.texture_id(ctx), image.size_vec2())).on_hover_text(self.tooltips.get(name).unwrap_or(&"Error".to_string()))
-                    }
-                    Err(_) => {
-                        ui.add(Button::new(name))
-                    }
-                }
-            }
-            None => {
-                ui.add(Button::new(name))
-            }
+            Some(val) => match val {
+                Ok(image) => ui
+                    .add(ImageButton::new(image.texture_id(ctx), image.size_vec2()))
+                    .on_hover_text(self.tooltips.get(name).unwrap_or(&"Error".to_string())),
+                Err(_) => ui.add(Button::new(name)),
+            },
+            None => ui.add(Button::new(name)),
         }
     }
 
     /// Renders an icon using the svg corresponding to the given name, if the svg failed to load or the name does not correspond to any svg, it spawns a button with the name passed as parameter to icon
     fn icon(&mut self, name: &str, ctx: &Context, ui: &mut Ui) -> Response {
         match self.icons.get(name) {
-            Some(val) => {
-                match val {
-                    Ok(image) => {
-                        ui.image(image.texture_id(ctx), image.size_vec2()).on_hover_text(self.tooltips.get(name).unwrap_or(&"Error".to_string()))
-                    }
-                    Err(_) => {
-                        ui.add(Label::new(name))
-                    }
-                }
-            }
-            None => {
-                ui.add(Label::new(name))
-            }
+            Some(val) => match val {
+                Ok(image) => ui
+                    .image(image.texture_id(ctx), image.size_vec2())
+                    .on_hover_text(self.tooltips.get(name).unwrap_or(&"Error".to_string())),
+                Err(_) => ui.add(Label::new(name)),
+            },
+            None => ui.add(Label::new(name)),
         }
     }
 
@@ -505,7 +608,6 @@ impl RustShot {
                 Tool::None => ui.add(Label::new("No tool selected")),
             };
             let rmv_tool_btn = self.icon_button("x-octagon", ctx, ui);
-
 
             if rmv_tool_btn.clicked() {
                 self.paint_info.curr_tool = Tool::None;
@@ -623,13 +725,20 @@ impl RustShot {
         if img.dragged() {
             if !self.paint_info.painting {
                 self.paint_info.painting = true;
-                self.paint_info.last_ptr = into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
+                self.paint_info.last_ptr =
+                    into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
             }
             self.paint_info.curr_ptr = match img.hover_pos() {
                 Some(pos) => into_relative_pos(pos, img.rect),
                 None => self.paint_info.last_ptr,
             };
-            let new_screen = match self.paint_info.draw_shape(self.intermediate_screenshot.as_ref().unwrap().as_rgb8().unwrap()) {
+            let new_screen = match self.paint_info.draw_shape(
+                self.intermediate_screenshot
+                    .as_ref()
+                    .unwrap()
+                    .as_rgb8()
+                    .unwrap(),
+            ) {
                 Some(screen) => screen,
                 None => self.screenshot.as_ref().unwrap().as_rgb8().unwrap().clone(),
             };
@@ -639,13 +748,17 @@ impl RustShot {
             }
             self.screenshot = Some(DynamicImage::from(new_screen));
         } else if img.drag_released() {
-            self.intermediate_screenshot = Some(DynamicImage::from(self.screenshot.as_ref().unwrap().clone()));
+            self.intermediate_screenshot = Some(DynamicImage::from(
+                self.screenshot.as_ref().unwrap().clone(),
+            ));
             self.paint_info.soft_reset();
         }
         //Change cursor when using a tool
         match self.paint_info.curr_tool {
             Tool::None => {}
-            _ => { img.on_hover_cursor(CursorIcon::Crosshair); }
+            _ => {
+                img.on_hover_cursor(CursorIcon::Crosshair);
+            }
         }
     }
 }
