@@ -1,9 +1,5 @@
 use crate::screen::{self, take_screenshot};
-use eframe::egui::{
-    Align, Button, CentralPanel, ColorImage, ComboBox, Context, CursorIcon, ImageButton,
-    InputState, Key, KeyboardShortcut, Label, Layout, Modifiers, Pos2, Rect, Response, ScrollArea,
-    Sense, Shape, TextureId, TopBottomPanel, Ui, Vec2, Window,
-};
+use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, CursorIcon, ImageButton, InputState, Key, KeyboardShortcut, Label, Layout, Modifiers, Pos2, Rect, Response, ScrollArea, Sense, Shape, Slider, TextureId, TopBottomPanel, Ui, Vec2, Window};
 
 use arboard::Clipboard;
 use eframe::{run_native, NativeOptions};
@@ -151,7 +147,7 @@ impl PaintState {
     }
 }
 
-fn draw_thick_line(img: &DynamicImage, start:(f32, f32), end:(f32, f32), t: usize, color: [u8; 4]) -> DynamicImage {
+fn draw_thick_line(img: &DynamicImage, start:(f32, f32), end:(f32, f32), t: usize, mut color: [u8; 4]) -> DynamicImage {
     let mut new_screen = img.clone();
     let segment = bresenham_line(start.0 as usize, start.1 as usize, end.0 as usize, end.1 as usize);
     for point in segment {
@@ -159,6 +155,8 @@ fn draw_thick_line(img: &DynamicImage, start:(f32, f32), end:(f32, f32), t: usiz
     }
     return new_screen;
 }
+
+fn highlight_
 
 fn bresenham_line(x0: usize, y0: usize, x1: usize, y1: usize) -> Vec<(usize, usize)> {
     let mut points = Vec::new();
