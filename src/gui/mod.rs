@@ -1,5 +1,5 @@
 use crate::screen::{self, take_screenshot};
-use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, ImageButton, KeyboardShortcut, Layout, Pos2, Rect, Response, ScrollArea, Sense, Shape, TopBottomPanel, Window, Key, Modifiers, InputState, Ui, TextureId, Label, CursorIcon};
+use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, ImageButton, KeyboardShortcut, Layout, Pos2, Rect, Response, ScrollArea, Sense, Shape, TopBottomPanel, Window, Key, Modifiers, InputState, Ui, TextureId, Label, CursorIcon, Vec2};
 
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
@@ -10,9 +10,12 @@ use imageproc::drawing;
 use scrap::Display;
 use std::cmp::max;
 use std::collections::HashMap;
+use std::ops::MulAssign;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use imageproc::drawing::draw_polygon;
+use imageproc::point::Point;
 use rfd::FileDialog;
 
 fn select_display(index: usize) -> Option<Display> {
@@ -58,13 +61,14 @@ enum Tool {
     Eraser,
     None,
 }
-#[derive(PartialEq, Eq, PartialOrd, Ord,Hash)]
+
+#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum KeyCommand {
     SaveScreenshot,
     TakeScreenshot,
     Crop,
     Paint,
-    None    
+    None,
 }
 
 struct PaintState {
@@ -92,6 +96,36 @@ impl PaintState {
         self.curr_ptr = Pos2::default();
     }
 
+    fn draw_thick_line(&self, img: &RgbImage, t: f32) -> Image<Rgb<u8>> {
+        let starting_point = (self.last_ptr.x, self.last_ptr.y);
+        let ending_point = (self.curr_ptr.x, self.curr_ptr.y);
+        let size = t;
+        // calculate the direction vector of the line
+        let dx = ending_point.0 - starting_point.0;
+        let dy = ending_point.1 - starting_point.1;
+        let length = (dx * dx + dy * dy).sqrt();
+        // calculate the normalized perpendicular vector to the line
+        let nx = dy / length;
+        let ny = -dx / length;
+        // calculate the step size for the brush strokes
+        let step_size = 0.5;
+        let thickness = 2 * (size + 0.5) as i32;
+        let mut new_screen = Image::from(img.clone());
+        for i in 0..thickness {
+            // calculate the offset along the perpendicular vector
+            let offset = (i as f32 - size) * step_size;
+            // calculate the starting and ending points for each brush stroke
+            let start_x = starting_point.0 + nx * offset;
+            let start_y = starting_point.1 + ny * offset;
+            let end_x = ending_point.0 + nx * offset;
+            let end_y = ending_point.1 + ny * offset;
+            // draw the brush stroke
+            drawing::draw_line_segment_mut(&mut new_screen, (start_x, start_y), (end_x, end_y), self.curr_color.into());
+        }
+        return new_screen;
+    }
+
+    ///Draw a shape on the given img based on the field inside [self] ([curr_tool], [curr_color], [last_ptr], [curr_ptr])
     fn draw_shape(&self, img: &RgbImage) -> Option<Image<Rgb<u8>>> {
         let mut start_ptr = self.last_ptr;
         let width = max(1, (self.curr_ptr.x - self.last_ptr.x).abs() as i32);
@@ -108,7 +142,7 @@ impl PaintState {
         let mut new_screen = None;
         match self.curr_tool {
             Tool::Drawing => {
-                new_screen = Some(drawing::draw_line_segment(img, (start_ptr.x, start_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_color.into()));
+                new_screen = Some(self.draw_thick_line(img, 5.));
             }
             Tool::HollowRect => {
                 new_screen = Some(drawing::draw_hollow_rect(img, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color.into()));
@@ -164,30 +198,30 @@ struct RustShot {
     action: Action,
     show_confirmation_dialog: bool,
     allowed_to_close: bool,
-    shortcuts : HashMap<KeyCommand,KeyboardShortcut>,
-    icons: HashMap<String,Result<RetainedImage, String>>,
-    tooltips: HashMap<String,String>,
+    shortcuts: HashMap<KeyCommand, KeyboardShortcut>,
+    icons: HashMap<String, Result<RetainedImage, String>>,
+    tooltips: HashMap<String, String>,
 }
 
 /// Load in the application state the svg icons as RetainedImage, and also the correspondence between the backend name of the icon and its tooltip.
-fn load_icons() -> (HashMap<String,Result<RetainedImage, String>>, HashMap<String,String>) {
+fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<String, String>) {
     let mut icons_map = HashMap::new();
     let mut tooltips_map = HashMap::new();
-    icons_map.insert("pencil-fill".to_string(), RetainedImage::from_svg_bytes("pencil-fill",include_bytes!("../../resources/pencil-fill.svg")));
+    icons_map.insert("pencil-fill".to_string(), RetainedImage::from_svg_bytes("pencil-fill", include_bytes!("../../resources/pencil-fill.svg")));
     tooltips_map.insert("pencil-fill".to_string(), "Pencil".to_string());
-    icons_map.insert("square-fill".to_string(), RetainedImage::from_svg_bytes("square-fill",include_bytes!("../../resources/square-fill.svg")));
+    icons_map.insert("square-fill".to_string(), RetainedImage::from_svg_bytes("square-fill", include_bytes!("../../resources/square-fill.svg")));
     tooltips_map.insert("square-fill".to_string(), "Filled Rectangle".to_string());
-    icons_map.insert("square".to_string(), RetainedImage::from_svg_bytes("square",include_bytes!("../../resources/square.svg")));
+    icons_map.insert("square".to_string(), RetainedImage::from_svg_bytes("square", include_bytes!("../../resources/square.svg")));
     tooltips_map.insert("square".to_string(), "Hollow Rectangle".to_string());
-    icons_map.insert("circle-fill".to_string(), RetainedImage::from_svg_bytes("circle-fill",include_bytes!("../../resources/circle-fill.svg")));
+    icons_map.insert("circle-fill".to_string(), RetainedImage::from_svg_bytes("circle-fill", include_bytes!("../../resources/circle-fill.svg")));
     tooltips_map.insert("circle-fill".to_string(), "Filled Circle".to_string());
-    icons_map.insert("circle".to_string(), RetainedImage::from_svg_bytes("circle",include_bytes!("../../resources/circle.svg")));
+    icons_map.insert("circle".to_string(), RetainedImage::from_svg_bytes("circle", include_bytes!("../../resources/circle.svg")));
     tooltips_map.insert("circle".to_string(), "Hollow Circle".to_string());
-    icons_map.insert("arrow-up-right".to_string(), RetainedImage::from_svg_bytes("arrow-up-right",include_bytes!("../../resources/arrow-up-right.svg")));
+    icons_map.insert("arrow-up-right".to_string(), RetainedImage::from_svg_bytes("arrow-up-right", include_bytes!("../../resources/arrow-up-right.svg")));
     tooltips_map.insert("arrow-up-right".to_string(), "Arrow".to_string());
-    icons_map.insert("eraser-fill".to_string(), RetainedImage::from_svg_bytes("eraser-fill",include_bytes!("../../resources/eraser-fill.svg")));
+    icons_map.insert("eraser-fill".to_string(), RetainedImage::from_svg_bytes("eraser-fill", include_bytes!("../../resources/eraser-fill.svg")));
     tooltips_map.insert("eraser-fill".to_string(), "Eraser".to_string());
-    icons_map.insert("x-octagon".to_string(), RetainedImage::from_svg_bytes("x-octagon",include_bytes!("../../resources/x-octagon.svg")));
+    icons_map.insert("x-octagon".to_string(), RetainedImage::from_svg_bytes("x-octagon", include_bytes!("../../resources/x-octagon.svg")));
     tooltips_map.insert("x-octagon".to_string(), "Stop using this tool".to_string());
     return (icons_map, tooltips_map);
 }
@@ -201,10 +235,10 @@ impl RustShot {
         // for e.g. egui::PaintCallback.
         let (tx, rx) = channel();
         let mut map = HashMap::new();
-        map.insert( KeyCommand::SaveScreenshot,KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::S });
-        map.insert(KeyCommand::TakeScreenshot,KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::T });
-        map.insert(KeyCommand::Crop,KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::C });
-        map.insert(KeyCommand::Paint,KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::P });
+        map.insert(KeyCommand::SaveScreenshot, KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::S });
+        map.insert(KeyCommand::TakeScreenshot, KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::T });
+        map.insert(KeyCommand::Crop, KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::C });
+        map.insert(KeyCommand::Paint, KeyboardShortcut { modifiers: Modifiers::CTRL, key: Key::P });
         let (icons_map, tooltips_map) = load_icons();
         RustShot {
             screenshot: None,
@@ -229,7 +263,7 @@ impl RustShot {
             action: Action::None,
             allowed_to_close: true,
             show_confirmation_dialog: false,
-            shortcuts : map,
+            shortcuts: map,
             icons: icons_map,
             tooltips: tooltips_map,
         }
@@ -283,7 +317,7 @@ impl RustShot {
                             }
                         });
                     }
-                    
+
                     if screenshot_save_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::SaveScreenshot).unwrap())) {
                         match &self.screenshot {
                             Some(screenshot) => {
@@ -325,36 +359,35 @@ impl RustShot {
                             self.action = Action::Paint;
                         }
                     }
-                let mut selected = 0;
-                ComboBox::from_label("Select Display")
-                    .selected_text(format!("{:?}", self.display.unwrap()))
-                    .show_ui(ui, |ui| {
-                        for (i, display) in screen::display_list().into_iter().enumerate() {
-                            if ui
-                                .selectable_value(
-                                    &mut self.display.clone().unwrap(),
-                                    i,
-                                    format!(
-                                        "Display {} - {}x{} px",
+                    let mut selected = 0;
+                    ComboBox::from_label("Select Display")
+                        .selected_text(format!("{:?}", self.display.unwrap()))
+                        .show_ui(ui, |ui| {
+                            for (i, display) in screen::display_list().into_iter().enumerate() {
+                                if ui
+                                    .selectable_value(
+                                        &mut self.display.clone().unwrap(),
                                         i,
-                                        display.width(),
-                                        display.height()
-                                    ),
-                                )
-                                .clicked()
-                            {
-                                selected = i;
-                                println!("Selected : {}", selected);
-                                self.display = Some(selected);
+                                        format!(
+                                            "Display {} - {}x{} px",
+                                            i,
+                                            display.width(),
+                                            display.height()
+                                        ),
+                                    )
+                                    .clicked()
+                                {
+                                    selected = i;
+                                    println!("Selected : {}", selected);
+                                    self.display = Some(selected);
+                                }
                             }
-                        }
-                    });
-                }
-                else if self.action == Action::Crop {
+                        });
+                } else if self.action == Action::Crop {
                     self.render_crop_tools(ui);
                 } else if self.action == Action::Crop {
                     let undo_crop_btn = ui.add(Button::new("Stop cropping"));
-                    if undo_crop_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::Crop).unwrap()))  {
+                    if undo_crop_btn.clicked() || ctx.input_mut(|i| i.consume_shortcut(self.shortcuts.get(&KeyCommand::Crop).unwrap())) {
                         //To restore image without cropping rect
                         self.restore_from_crop();
                     }
@@ -392,7 +425,7 @@ impl RustShot {
     }
 
     /// Renders an ImageButton using the svg corresponding to the given name, if the svg failed to load or the name does not correspond to any svg, it spawns a button with the name passed as parameter to icon_button
-    fn icon_button(&mut self, name:&str, ctx: &Context, ui: &mut Ui) -> Response {
+    fn icon_button(&mut self, name: &str, ctx: &Context, ui: &mut Ui) -> Response {
         match self.icons.get(name) {
             Some(val) => {
                 match val {
@@ -411,7 +444,7 @@ impl RustShot {
     }
 
     /// Renders an icon using the svg corresponding to the given name, if the svg failed to load or the name does not correspond to any svg, it spawns a button with the name passed as parameter to icon
-    fn icon(&mut self, name:&str, ctx: &Context, ui: &mut Ui) -> Response {
+    fn icon(&mut self, name: &str, ctx: &Context, ui: &mut Ui) -> Response {
         match self.icons.get(name) {
             Some(val) => {
                 match val {
@@ -456,8 +489,7 @@ impl RustShot {
             let rmv_tool_btn = self.icon_button("x-octagon", ctx, ui);
 
 
-
-            if rmv_tool_btn.clicked(){
+            if rmv_tool_btn.clicked() {
                 self.paint_info.curr_tool = Tool::None;
             }
             if save_paint_btn.clicked() {
@@ -594,8 +626,8 @@ impl RustShot {
         }
         //Change cursor when using a tool
         match self.paint_info.curr_tool {
-            Tool::None => {},
-            _ => {img.on_hover_cursor(CursorIcon::Crosshair);},
+            Tool::None => {}
+            _ => { img.on_hover_cursor(CursorIcon::Crosshair); }
         }
     }
 }
@@ -604,16 +636,16 @@ impl App for RustShot {
     fn update(&mut self, ctx: &Context, frame: &mut Frame) {
         match self.receiver.try_recv() {
             Ok(screenshot) => {
-                        //Show the application window again
-                        frame.set_visible(true);
-                        //let color_image = ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes());
-                        //self.screenshot = Some(RetainedImage::from_color_image("screenshot", color_image));
-                        self.screenshot = Some(screenshot.clone());
-                        self.intermediate_screenshot = Some(screenshot.clone());
+                //Show the application window again
+                frame.set_visible(true);
+                //let color_image = ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes());
+                //self.screenshot = Some(RetainedImage::from_color_image("screenshot", color_image));
+                self.screenshot = Some(screenshot.clone());
+                self.intermediate_screenshot = Some(screenshot.clone());
                 self.final_screenshot = Some(screenshot);
             }
             Err(_) => {}
-            }
+        }
         self.render_top_panel(ctx, frame);
         self.render_central_panel(ctx, frame);
         if self.show_confirmation_dialog {
@@ -641,8 +673,8 @@ impl App for RustShot {
         }
         self.allowed_to_close
     }
-
 }
+
 pub fn main_window() -> eframe::Result<()> {
     let window_option = NativeOptions::default();
     run_native(
