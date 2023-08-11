@@ -1,11 +1,16 @@
-use crate::screen::{self, take_screenshot};
-use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, CursorIcon, ImageButton, InputState, Key, KeyboardShortcut, Label, Layout, Modifiers, Pos2, Rect, Response, ScrollArea, Sense, Shape, Slider, TextureId, TopBottomPanel, Ui, Vec2, Window};
+mod image_proc_extra_mod;
+mod editing_mod;
 
+use crate::screen::{self, take_screenshot};
+use crate::gui::image_proc_extra_mod::*;
+use crate::gui::editing_mod::*;
+
+use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, CursorIcon, ImageButton, InputState, Key, KeyboardShortcut, Label, Layout, Modifiers, Pos2, Rect, Response, ScrollArea, Sense, Shape, Slider, TextureId, TopBottomPanel, Ui, Vec2, Window};
 use arboard::Clipboard;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
-use image::{DynamicImage, Rgb, RgbImage, Rgba};
+use image::{DynamicImage, Rgb, RgbImage, Rgba, GenericImage, Pixel, GenericImageView};
 use imageproc::definitions::Image;
 use imageproc::drawing;
 use rfd::FileDialog;
@@ -16,6 +21,7 @@ use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use imageproc::drawing::{BresenhamLineIter, Canvas};
 
 fn select_display(index: usize) -> Option<DisplayInfo> {
     /*let mut iter = screen::display_list().into_iter().enumerate();
@@ -43,13 +49,6 @@ fn select_display(index: usize) -> Option<DisplayInfo> {
     }
 }
 
-/// Transform the absolute position ([Pos2]) of the mouse on the application window into a relative position with respect to the given [Rect]
-///
-/// [Rect] must be meaningful with respect to the application window. (It needs to actually be a part of the application window to obtain a meaningful relative position)
-fn into_relative_pos(pos: Pos2, rect: Rect) -> Pos2 {
-    Pos2::new(pos.x - rect.left(), pos.y - rect.top())
-}
-
 #[derive(PartialEq, Eq)]
 enum Action {
     Crop,
@@ -57,17 +56,6 @@ enum Action {
     None,
 }
 
-#[derive(PartialEq, Eq)]
-enum Tool {
-    Drawing,
-    HollowRect,
-    FilledRect,
-    Arrow,
-    HollowCircle,
-    FilledCircle,
-    Eraser,
-    None,
-}
 
 #[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
 enum KeyCommand {
@@ -78,137 +66,7 @@ enum KeyCommand {
     None,
 }
 
-struct PaintState {
-    curr_tool: Tool,
-    curr_color: [u8; 4],
-    curr_thickness: usize,
-    painting: bool,
-    last_ptr: Pos2,
-    curr_ptr: Pos2,
-}
 
-impl PaintState {
-    /// Reset the paint state to its default values, including the current tool and color
-    fn reset(&mut self) {
-        self.painting = false;
-        self.last_ptr = Pos2::default();
-        self.curr_ptr = Pos2::default();
-        self.curr_tool = Tool::None;
-        self.curr_color = [255, 255, 255, 255];
-    }
-
-    /// Reset the paint state to its default values, excluding the current tool and color
-    fn soft_reset(&mut self) {
-        self.painting = false;
-        self.last_ptr = Pos2::default();
-        self.curr_ptr = Pos2::default();
-    }
-
-
-    ///Draw a shape on the given img based on the field inside [self] ([curr_tool], [curr_color], [last_ptr], [curr_ptr])
-    fn draw_shape(&self, img: &DynamicImage) -> DynamicImage {
-        let mut start_ptr = self.last_ptr;
-        let width = max(1, (self.curr_ptr.x - self.last_ptr.x).abs() as i32);
-        let height = max(1, (self.curr_ptr.y - self.last_ptr.y).abs() as i32);
-        if self.curr_tool != Tool::Drawing && self.curr_tool != Tool::FilledCircle && self.curr_tool != Tool::HollowCircle {
-            //Permits an easier selection, allowing to generate the area in all directions
-            if self.curr_ptr.x < self.last_ptr.x {
-                start_ptr.x = self.curr_ptr.x;
-            }
-            if self.curr_ptr.y < self.last_ptr.y {
-                start_ptr.y = self.curr_ptr.y;
-            }
-        }
-        let mut new_screen = img.clone();
-        match self.curr_tool {
-            Tool::Drawing => {
-                new_screen = draw_thick_line(img, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness, self.curr_color.into());
-            }
-            Tool::HollowRect => {
-                drawing::draw_hollow_rect_mut(&mut new_screen, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color.into());
-            }
-            Tool::FilledRect => {
-                drawing::draw_filled_rect_mut(&mut new_screen, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color.into());
-            }
-            Tool::HollowCircle => {
-                let radius = ((width.pow(2) + height.pow(2)) as f64).sqrt() as i32;
-                drawing::draw_hollow_circle_mut(&mut new_screen, (start_ptr.x as i32, start_ptr.y as i32), radius, self.curr_color.into());
-            }
-            Tool::FilledCircle => {
-                let radius = ((width.pow(2) + height.pow(2)) as f64).sqrt() as i32;
-                drawing::draw_filled_circle_mut(&mut new_screen, (start_ptr.x as i32, start_ptr.y as i32), radius, self.curr_color.into());
-            }
-            Tool::Arrow => {
-                drawing::draw_line_segment_mut(&mut new_screen, (start_ptr.x, start_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_color.into());
-            }
-            _ => {}
-        }
-        return new_screen;
-    }
-}
-
-fn draw_thick_line(img: &DynamicImage, start:(f32, f32), end:(f32, f32), t: usize, mut color: [u8; 4]) -> DynamicImage {
-    let mut new_screen = img.clone();
-    let segment = bresenham_line(start.0 as usize, start.1 as usize, end.0 as usize, end.1 as usize);
-    for point in segment {
-        drawing::draw_filled_circle_mut(&mut new_screen, (point.0 as i32, point.1 as i32), t as i32, color.into());
-    }
-    return new_screen;
-}
-
-fn highlight_
-
-fn bresenham_line(x0: usize, y0: usize, x1: usize, y1: usize) -> Vec<(usize, usize)> {
-    let mut points = Vec::new();
-
-    let dx = (x1 as i32 - x0 as i32).abs();
-    let dy = (y1 as i32 - y0 as i32).abs();
-
-    let mut x = x0 as i32;
-    let mut y = y0 as i32;
-
-    let x_inc = if x1 > x0 { 1 } else { -1 };
-    let y_inc = if y1 > y0 { 1 } else { -1 };
-
-    let mut error = dx - dy;
-
-    while x != x1 as i32 || y != y1 as i32 {
-        points.push((x as usize, y as usize));
-
-        let error2 = error * 2;
-
-        if error2 > -dy {
-            error -= dy;
-            x += x_inc;
-        }
-
-        if error2 < dx {
-            error += dx;
-            y += y_inc;
-        }
-    }
-
-    points.push((x1, y1)); // Include the endpoint
-
-    points
-}
-
-struct CropState {
-    clicked: bool,
-    start_ptr: Pos2,
-    end_ptr: Pos2,
-    curr_ptr: Pos2,
-}
-
-impl CropState {
-    /// Reset the crop state to its default values
-    fn reset(&mut self) {
-        self.clicked = false;
-        self.start_ptr = Pos2::default();
-        self.end_ptr = Pos2::default();
-        self.curr_ptr = Pos2::default();
-    }
-}
 
 struct RustShot {
     screenshot: Option<DynamicImage>,
@@ -290,6 +148,11 @@ fn load_icons() -> (
         RetainedImage::from_svg_bytes("x-octagon", include_bytes!("../../resources/x-octagon.svg")),
     );
     tooltips_map.insert("x-octagon".to_string(), "Stop using this tool".to_string());
+    icons_map.insert(
+        "pen-fill".to_string(),
+        RetainedImage::from_svg_bytes("pen-fill", include_bytes!("../../resources/pen-fill.svg")),
+    );
+    tooltips_map.insert("pen-fill".to_string(), "Highlight".to_string());
     return (icons_map, tooltips_map);
 }
 
@@ -584,6 +447,7 @@ impl RustShot {
             let hollow_circle_btn = self.icon_button("circle", ctx, ui);
             let filled_circle_btn = self.icon_button("circle-fill", ctx, ui);
             let arrow_btn = self.icon_button("arrow-up-right", ctx, ui);
+            let highligher_btn = self.icon_button("pen-fill", ctx, ui);
             let eraser_btn = self.icon_button("eraser-fill", ctx, ui);
             let rmv_tool_btn = self.icon_button("x-octagon", ctx, ui);
             ui.color_edit_button_srgba_unmultiplied(&mut self.paint_info.curr_color);
@@ -596,6 +460,7 @@ impl RustShot {
                 Tool::FilledCircle => self.icon("circle-fill", ctx, ui),
                 Tool::Arrow => self.icon("arrow-up-right", ctx, ui),
                 Tool::Eraser => self.icon("eraser-fill", ctx, ui),
+                Tool::Highlighter => self.icon("pen-fill", ctx, ui),
                 Tool::None => ui.add(Label::new("No tool selected")),
             };
             ui.add(Slider::new(&mut self.paint_info.curr_thickness, 0..=30));
@@ -626,6 +491,9 @@ impl RustShot {
             }
             if arrow_btn.clicked() {
                 self.paint_info.curr_tool = Tool::Arrow;
+            }
+            if highligher_btn.clicked(){
+                self.paint_info.curr_tool = Tool::Highlighter;
             }
         });
     }
@@ -722,8 +590,8 @@ impl RustShot {
                 Some(pos) => into_relative_pos(pos, img.rect),
                 None => self.paint_info.last_ptr,
             };
-            let new_screen = self.paint_info.draw_shape(self.intermediate_screenshot.as_ref().unwrap());
-            if self.paint_info.curr_tool == Tool::Drawing {
+            let new_screen = self.paint_info.draw_shape(self.intermediate_screenshot.as_ref().unwrap(), self.final_screenshot.as_ref().unwrap());
+            if self.paint_info.curr_tool == Tool::Drawing || self.paint_info.curr_tool == Tool::Highlighter{
                 self.paint_info.last_ptr = self.paint_info.curr_ptr;
                 self.intermediate_screenshot = Some(DynamicImage::from(new_screen.clone()));
             }
