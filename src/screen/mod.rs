@@ -1,50 +1,36 @@
-use scrap::{Capturer, Display};
 use std::io::ErrorKind::WouldBlock;
 use std::thread;
 use std::time::Duration;
 
+use screenshots::{DisplayInfo, Image, Screen};
+
 use image::{DynamicImage, ImageBuffer};
 
-pub fn display_list() -> Vec<Display> {
-    let temp = Display::all().expect("Can't find any screen");
+pub fn display_list() -> Vec<DisplayInfo> {
+    let temp = screenshots::DisplayInfo::all().unwrap();
     return temp;
 }
 
-pub fn take_screenshot(display: Display) -> Option<DynamicImage> {
-    let one_second = Duration::new(1, 0);
-    let one_frame = one_second / 60;
+pub fn take_screenshot(disp: &DisplayInfo) -> Option<DynamicImage> {
+    let tk : Screen = Screen::new(disp);
+    let capture = tk.capture();
+    let screen;
+    match capture 
+    {
+        Ok(capture)=> screen = capture,
 
-    let mut capturer = Capturer::new(display).expect("Couldn't begin capture.");
-    let (w, h) = (capturer.width(), capturer.height());
+        Err(_) => return None,
 
-    loop {
-        // Wait until there's a frame.
-
-        let buffer = match capturer.frame() {
-            Ok(buffer) => buffer,
-            Err(error) => {
-                if error.kind() == WouldBlock {
-                    // Keep spinning.
-                    thread::sleep(one_frame);
-                    continue;
-                } else {
-                    panic!("Error: {}", error);
-                }
-            }
-        };
-
-        println!("Captured!");
-        let stride = buffer.len() / h;
-
-        let img = ImageBuffer::from_fn(w as u32,h as u32, |x, y| {
-            let i = stride * y as usize + 4 * x as usize;
-            image::Rgb([buffer[i + 2], buffer[i + 1], buffer[i]]) //flip the bits
-        });
-        let img2 = DynamicImage::from(img);
-        // Save the image.
-        //let temp = img.into_raw();
-        //repng::encode(File::create(path).unwrap(), w as u32, h as u32, &bitflipped).unwrap();
-        //image::save_buffer(path, &buffer, w as u32, h as u32, image::ColorType::Rgba8).unwrap();
-        break Some(img2);
     }
-}
+    let im = screen.rgba();
+    let (w, h) = (screen.width(), screen.height());
+    let stride = im.len() / h as usize;
+    let img: ImageBuffer<image::Rgba<u8>, Vec<u8>> =
+        ImageBuffer::from_fn(w as u32, h as u32, |x, y| {
+            let i = stride * y as usize + 4 * x as usize;
+            image::Rgba([im[i], im[i + 1], im[i + 2], im[i + 3]])
+        });
+    let img2 = DynamicImage::from(img);
+    return Some(img2);
+    }
+

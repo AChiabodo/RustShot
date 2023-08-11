@@ -13,7 +13,7 @@ use image::{DynamicImage, Rgb, RgbImage, Rgba};
 use imageproc::definitions::Image;
 use imageproc::drawing;
 use rfd::FileDialog;
-use scrap::Display;
+use screenshots::DisplayInfo;
 use std::borrow::Cow;
 use std::cmp::max;
 use std::collections::HashMap;
@@ -21,8 +21,8 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 
-fn select_display(index: usize) -> Option<Display> {
-    let mut iter = screen::display_list().into_iter().enumerate();
+fn select_display(index: usize) -> Option<DisplayInfo> {
+    /*let mut iter = screen::display_list().into_iter().enumerate();
     return loop {
         match iter.next() {
             Some((i, display)) => {
@@ -36,7 +36,15 @@ fn select_display(index: usize) -> Option<Display> {
                 break None;
             }
         }
-    };
+    };*/
+
+    let mydisp = screenshots::DisplayInfo::all();
+    match mydisp {
+        Ok(disp) => 
+            Some(disp[index]),
+        
+        Err(_) => None,
+    }
 }
 
 /// Transform the absolute position ([Pos2]) of the mouse on the application window into a relative position with respect to the given [Rect]
@@ -393,18 +401,10 @@ impl RustShot {
     fn copy_image(&mut self) {
         let mut clipboard = Clipboard::new().unwrap();
         let bytes = self.screenshot.as_ref().unwrap().as_bytes();
-        let mut rgba: Vec<u8> = Vec::new();
-        for i in 0..bytes.len() {
-            if i % 3 == 0 && i != 0 {
-                rgba.push(255 as u8);
-            }
-            rgba.push(bytes[i]);
-        }
-        rgba.push(255);
         let img = arboard::ImageData {
             width: self.screenshot.as_ref().unwrap().width() as usize,
             height: self.screenshot.as_ref().unwrap().height() as usize,
-            bytes: Cow::from(rgba.as_slice()),
+            bytes: Cow::from(bytes),
         };
         let done = clipboard.set_image(img);
     }
@@ -493,9 +493,10 @@ impl RustShot {
         //Thread that manages screenshots
         thread::spawn(move || {
             thread::sleep(Duration::from_millis(timer*1000 + 300));
-            let current_display = select_display(value as usize)
+            let current_display: DisplayInfo = select_display(value as usize)
                 .expect("Cannot select the correct display");
-            let screenshot = take_screenshot(current_display).unwrap();
+            let screenshot = take_screenshot(&current_display).unwrap();
+            println!("screenshot done");
             match tx.send(screenshot) {
                 //Force update() to be called again, so that the application window is made visible again. (when it's not visible otherwise update won't be called)
                 Ok(_) => c.request_repaint(),
@@ -517,8 +518,8 @@ impl RustShot {
                             format!(
                                 "Display {} - {}x{} px",
                                 i,
-                                display.width(),
-                                display.height()
+                                display.width,
+                                display.height,
                             ),
                         )
                         .clicked()
@@ -538,7 +539,7 @@ impl RustShot {
                 ScrollArea::both().show(ui, |ui| {
                     let retained_img = RetainedImage::from_color_image(
                         "screenshot",
-                        ColorImage::from_rgb(
+                        ColorImage::from_rgba_unmultiplied(
                             [screenshot.width() as usize, screenshot.height() as usize],
                             screenshot.as_bytes(),
                         ),
