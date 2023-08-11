@@ -17,6 +17,12 @@ use std::time::Duration;
 use imageproc::drawing::draw_polygon;
 use imageproc::point::Point;
 use rfd::FileDialog;
+use scrap::Display;
+use std::borrow::Cow;
+use std::cmp::max;
+use std::sync::mpsc::{channel, Receiver, Sender};
+use std::thread;
+use std::time::Duration;
 
 fn select_display(index: usize) -> Option<Display> {
     let mut iter = screen::display_list().into_iter().enumerate();
