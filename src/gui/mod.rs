@@ -196,6 +196,7 @@ struct RustShot {
     crop_info: CropState,
     paint_info: PaintState,
     action: Action,
+    timer : Option<u64>,
     show_confirmation_dialog: bool,
     allowed_to_close: bool,
     shortcuts: HashMap<KeyCommand, KeyboardShortcut>,
@@ -261,11 +262,13 @@ impl RustShot {
                 curr_ptr: Pos2::default(),
             },
             action: Action::None,
+            timer : Some(0),
             allowed_to_close: true,
             show_confirmation_dialog: false,
             shortcuts: map,
             icons: icons_map,
             tooltips: tooltips_map,
+            
         }
     }
     /// Used to restore state of the application when stopping the crop action for some reason
@@ -394,6 +397,43 @@ impl RustShot {
                 } else if self.action == Action::Paint {
                     self.render_paint_tools(ctx, ui);
                 }
+                let copy_btn = ui.add(Button::new("Copy"));
+                    if copy_btn.clicked() && self.screenshot.is_some(){
+
+                        let mut clipboard = Clipboard::new().unwrap();
+                        let bytes = self.screenshot.as_ref().unwrap().as_bytes();
+                        let mut rgba:Vec<u8> = Vec::new();
+                        for i in 0..bytes.len() 
+                        {
+                            
+                            if i%3==0 && i!=0 
+                            {
+                                rgba.push(255 as u8);
+                            }
+                            rgba.push(bytes[i]);
+
+                        }       
+                        rgba.push(255);     
+                        let img = arboard::ImageData {
+                            width: self.screenshot.as_ref().unwrap().width() as usize,
+                            height: self.screenshot.as_ref().unwrap().height() as usize,
+                            bytes: Cow::from(rgba.as_slice()),
+                        };
+                        let done = clipboard.set_image(img);
+                        match done 
+                        {
+                            Ok(_) => println!("Copiato"),
+                            Err(_) => println!("Non copiato"),
+                        }
+                    }
+                    let combo_box = ComboBox::from_label("").width(80.0)
+                    .selected_text(format!("🕓 {:?} sec", self.timer.unwrap()))
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.timer, Some(0), "🕓 0 sec");
+                        ui.selectable_value(&mut self.timer, Some(2), "🕓 2 sec");
+                        ui.selectable_value(&mut self.timer, Some(5), "🕓 5 sec");
+                        ui.selectable_value(&mut self.timer, Some(10), "🕓 10 sec");
+                                        });
             })
         });
     }
