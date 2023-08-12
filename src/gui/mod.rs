@@ -150,7 +150,7 @@ fn load_icons() -> (
     tooltips_map.insert("x-octagon".to_string(), "Stop using this tool".to_string());
     icons_map.insert(
         "pen-fill".to_string(),
-        RetainedImage::from_svg_bytes("pen-fill", include_bytes!("../../resources/pen-fill.svg")),
+        RetainedImage::from_svg_bytes("pen-fill", include_bytes!("../../resources/highlighter-solid.svg")),
     );
     tooltips_map.insert("pen-fill".to_string(), "Highlight".to_string());
     return (icons_map, tooltips_map);
@@ -547,7 +547,7 @@ impl RustShot {
             self.restore_from_crop();
         }
         if self.crop_info.clicked {
-            let white = Rgb([255u8, 255u8, 255u8]);
+            let white = Rgba([255u8, 255u8, 255u8,255u8]);
             self.crop_info.curr_ptr = match img.hover_pos() {
                 Some(pos) => into_relative_pos(pos, img.rect),
                 None => self.crop_info.curr_ptr,
@@ -568,8 +568,8 @@ impl RustShot {
             if self.crop_info.curr_ptr.y < self.crop_info.start_ptr.y {
                 start_ptr.y = self.crop_info.curr_ptr.y;
             }
-            let new_screen: Image<Rgb<u8>> = drawing::draw_hollow_rect(
-                self.final_screenshot.as_ref().unwrap().as_rgb8().unwrap(),
+            let new_screen = drawing::draw_hollow_rect(
+                self.final_screenshot.as_ref().unwrap(),
                 imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32)
                     .of_size(width as u32, height as u32),
                 white,
