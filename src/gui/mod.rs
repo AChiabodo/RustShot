@@ -327,8 +327,6 @@ impl RustShot {
         });
     }
 
-
-
     fn render_shape_window(&mut self, ctx:&Context, ui:&mut Ui) {
         Window::new("Choose the shape").title_bar(false).
             show(ctx, |ui| {
@@ -616,7 +614,7 @@ fn save_screenshot(screenshot: &DynamicImage) {
                 &screenshot.as_bytes(),
                 screenshot.width() as u32,
                 screenshot.height() as u32,
-                image::ColorType::Rgb8,
+                image::ColorType::Rgba8,
             ) {
                 Ok(_) => println!("Screenshot saved"),
                 Err(err) => println!("{}", err),
