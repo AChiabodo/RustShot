@@ -274,7 +274,7 @@ impl RustShot {
 
                     //Spawn paint only if screenshot is already available
                     if self.curr_screenshot.is_some() {
-                        let paint_btn = ui.add(Button::new("Paint"));
+                        let paint_btn = ui.add(Button::new("Edit"));
                         let copy_btn = ui.add(Button::new("Copy"));
                         if paint_btn.clicked()
                             || ctx.input_mut(|i| {
