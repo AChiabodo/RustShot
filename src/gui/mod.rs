@@ -332,11 +332,11 @@ impl RustShot {
             show(ctx, |ui| {
                 ui.group( |ui| {
                     ui.horizontal(|ui|  {
-                    let hollow_rect_btn = self.icon_button("square", ctx, ui);
-                    let filled_rect_btn = self.icon_button("square-fill", ctx, ui);
-                    let hollow_circle_btn = self.icon_button("circle", ctx, ui);
-                    let filled_circle_btn = self.icon_button("circle-fill", ctx, ui);
-                    let arrow_btn = self.icon_button("arrow-up-right", ctx, ui);
+                    let hollow_rect_btn = self.icon_button("square", true, ctx, ui);
+                    let filled_rect_btn = self.icon_button("square-fill", true, ctx, ui);
+                    let hollow_circle_btn = self.icon_button("circle", true, ctx, ui);
+                    let filled_circle_btn = self.icon_button("circle-fill", true, ctx, ui);
+                    let arrow_btn = self.icon_button("arrow-up-right", true, ctx, ui);
                     if hollow_rect_btn.clicked() {
                         self.paint_info.curr_tool = Tool::HollowRect;
                     }
@@ -352,7 +352,7 @@ impl RustShot {
                     if arrow_btn.clicked() {
                         self.paint_info.curr_tool = Tool::Arrow;
                     }
-                    let close_btn = self.icon_button("x", ctx, ui);
+                    let close_btn = self.icon_button("x", true, ctx, ui);
                     if close_btn.clicked() {
                         self.shape_window_open = false;
                     }});
@@ -441,15 +441,15 @@ impl RustShot {
     }
 
     /// Renders an ImageButton using the svg corresponding to the given name, if the svg failed to load or the name does not correspond to any svg, it spawns a button with the name passed as parameter to icon_button
-    fn icon_button(&self, name: &str, ctx: &Context, ui: &mut Ui) -> Response {
+    fn icon_button(&self, name: &str, enabled:bool, ctx: &Context, ui: &mut Ui) -> Response {
         match self.icons.get(name) {
             Some(val) => match val {
                 Ok(image) => ui
-                    .add(ImageButton::new(image.texture_id(ctx), image.size_vec2()))
+                    .add_enabled(enabled, ImageButton::new(image.texture_id(ctx), image.size_vec2()))
                     .on_hover_text(self.tooltips.get(name).unwrap_or(&"Error".to_string())),
-                Err(_) => ui.add(Button::new(name)),
+                Err(_) => ui.add_enabled(enabled,Button::new(name)),
             },
-            None => ui.add(Button::new(name)),
+            None => ui.add_enabled(enabled, Button::new(name)),
         }
     }
 
@@ -474,12 +474,37 @@ impl RustShot {
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             let save_paint_btn = ui.add(Button::new("Save changes"));
             let undo_paint_btn = ui.add(Button::new("Undo changes"));
-            let draw_btn = self.icon_button("pencil-fill", ctx, ui);
-            let highlighter_btn = self.icon_button("highlighter-solid", ctx, ui);
-            let shape_btn = self.icon_button("pentagon", ctx, ui);
-            let crop_btn = self.icon_button("crop", ctx, ui);
-            let eraser_btn = self.icon_button("eraser-fill", ctx, ui);
-            let rmv_tool_btn = self.icon_button("x-octagon", ctx, ui);
+            if self.curr_screenshot.as_ref().unwrap().get_images_len() > 1 {
+                let undo_btn = self.icon_button("undo", true, ctx, ui);
+                if undo_btn.clicked() {
+                    let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
+                    let img = curr_screenshot.pop_last_image();
+                    curr_screenshot.push_redo_image(img);
+                    let img = curr_screenshot.get_last_image();
+                    curr_screenshot.set_tmp_image(img);
+                }
+            }
+            else {
+                let undo_btn = self.icon_button("undo", false, ctx, ui);
+            }
+            if self.curr_screenshot.as_ref().unwrap().get_redo_images_len() > 0 {
+                let redo_btn = self.icon_button("redo", true, ctx, ui);
+                if redo_btn.clicked() {
+                    let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
+                    let img = curr_screenshot.pop_redo_image().unwrap();
+                    curr_screenshot.stack_image(img.clone());
+                    curr_screenshot.set_tmp_image(img);
+                }
+            }
+            else {
+                let redo_btn = self.icon_button("redo", false, ctx, ui);
+            }
+            let draw_btn = self.icon_button("pencil-fill", true, ctx, ui);
+            let highlighter_btn = self.icon_button("highlighter-solid", true, ctx, ui);
+            let shape_btn = self.icon_button("pentagon", true, ctx, ui);
+            let crop_btn = self.icon_button("crop", true, ctx, ui);
+            let eraser_btn = self.icon_button("eraser-fill", true, ctx, ui);
+            let rmv_tool_btn = self.icon_button("x-octagon", true, ctx, ui);
             ui.label("Current tool:");
             let curr_tool = match self.paint_info.curr_tool {
                 Tool::Drawing => self.icon("pencil-fill", ctx, ui),

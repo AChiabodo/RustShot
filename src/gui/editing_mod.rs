@@ -130,6 +130,7 @@ impl CropState {
 
 pub struct ImageStack {
     pub images: VecDeque<DynamicImage>,
+    pub redo_images: VecDeque<DynamicImage>,
     pub tmp_image: DynamicImage,
     pub final_image: DynamicImage,
 }
@@ -140,9 +141,28 @@ impl ImageStack {
         images.push_front(image.clone());
         ImageStack {
             images,
+            redo_images: VecDeque::new(),
             tmp_image: image.clone(),
             final_image: image.clone(),
         }
+    }
+
+    /// Push a new image to the redo_images stack
+    pub fn push_redo_image(&mut self, image: DynamicImage) {
+        self.redo_images.push_front(image);
+    }
+
+    /// Push an image from the redo_images stack
+    pub fn pop_redo_image(&mut self) -> Option<DynamicImage> {
+        self.redo_images.pop_front()
+    }
+
+    pub fn get_images_len(&self) -> usize {
+        self.images.len()
+    }
+
+    pub fn get_redo_images_len(&self) -> usize {
+        self.redo_images.len()
     }
 
     /// Pop the last stacked image in the image stack, removing it. Returns [final image] if the stack is empty
@@ -210,6 +230,7 @@ impl ImageStack {
         self.final_image = self.get_last_image();
         self.tmp_image = self.get_last_image();
         self.images.clear();
+        self.redo_images.clear();
         self.stack_image(self.final_image.clone());
     }
 
