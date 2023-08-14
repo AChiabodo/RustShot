@@ -485,7 +485,7 @@ impl RustShot {
                 }
             }
             else {
-                let undo_btn = self.icon_button("undo", false, ctx, ui);
+                let undo_btn = self.icon_button("undo",  false, ctx, ui);
             }
             if self.curr_screenshot.as_ref().unwrap().get_redo_images_len() > 0 {
                 let redo_btn = self.icon_button("redo", true, ctx, ui);
