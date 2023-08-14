@@ -1,7 +1,7 @@
 use eframe::egui::{Pos2, Rect, Vec2};
 use image::{DynamicImage, GenericImageView, Pixel};
 use imageproc::drawing;
-use imageproc::drawing::{BresenhamLineIter, Canvas};
+use imageproc::drawing::{BresenhamLineIter, Canvas, draw_filled_circle_mut};
 
 pub fn draw_arrow (img: &mut DynamicImage, start:(f32, f32), end:(f32, f32), t: usize, color: [u8; 4]) {
     draw_thick_line(img, start, end, t, color);
@@ -26,6 +26,44 @@ pub fn erase_thick_line(original_img:&DynamicImage, img: &mut DynamicImage, star
     for point in segment {
         erase_filled_circle_mut(original_img, img, (point.0 as i32, point.1 as i32), t as i32);
     }
+}
+
+pub fn draw_thick_hollow_circle_mut(canvas: &mut DynamicImage, center: (i32, i32), radius: i32, thickness:usize, color: [u8; 4]) {
+    let mut x = 0i32;
+    let mut y = radius;
+    let mut p = 1 - radius;
+    let x0 = center.0;
+    let y0 = center.1;
+
+    while x <= y {
+        draw_filled_circle_mut(canvas, (x0 + x, y0 + y), thickness as i32, color.into());
+        draw_filled_circle_mut(canvas, (x0 + y, y0 + x), thickness as i32, color.into());
+        draw_filled_circle_mut(canvas, (x0 - y, y0 + x), thickness as i32, color.into());
+        draw_filled_circle_mut(canvas, (x0 - x, y0 + y), thickness as i32, color.into());
+        draw_filled_circle_mut(canvas, (x0 - x, y0 - y), thickness as i32, color.into());
+        draw_filled_circle_mut(canvas, (x0 - y, y0 - x), thickness as i32, color.into());
+        draw_filled_circle_mut(canvas, (x0 + y, y0 - x), thickness as i32, color.into());
+        draw_filled_circle_mut(canvas, (x0 + x, y0 - y), thickness as i32, color.into());
+        x += 1;
+        if p < 0 {
+            p += 2 * x + 1;
+        } else {
+            y -= 1;
+            p += 2 * (x - y) + 1;
+        }
+    }
+}
+
+pub fn draw_thick_hollow_rect_mut(canvas: &mut DynamicImage, rect: imageproc::rect::Rect, thickness:usize, color: [u8; 4]) {
+    let left = rect.left() as f32;
+    let right = rect.right() as f32;
+    let top = rect.top() as f32;
+    let bottom = rect.bottom() as f32;
+
+    draw_thick_line(canvas, (left, top), (right, top), thickness, color.into());
+    draw_thick_line(canvas, (left, bottom), (right, bottom), thickness,color.into());
+    draw_thick_line(canvas, (left, top), (left, bottom), thickness, color.into());
+    draw_thick_line(canvas, (right, top), (right, bottom), thickness, color.into());
 }
 
 pub fn draw_blended_line_segment_mut(original_canvas:&DynamicImage, canvas: &mut DynamicImage, start: (f32, f32), end: (f32, f32), mut color: [u8; 4]) {

@@ -11,8 +11,6 @@ use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
 use image::{DynamicImage, Rgb, RgbImage, Rgba, GenericImage, Pixel, GenericImageView};
-use imageproc::definitions::Image;
-use imageproc::drawing;
 use rfd::FileDialog;
 use screenshots::DisplayInfo;
 use std::borrow::Cow;
@@ -21,7 +19,6 @@ use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
-use imageproc::drawing::{BresenhamLineIter, Canvas};
 
 fn select_display(index: usize) -> Option<DisplayInfo> {
     /*let mut iter = screen::display_list().into_iter().enumerate();
@@ -65,6 +62,19 @@ enum KeyCommand {
     None,
 }
 
+struct AppWindow {
+    name: String,
+    is_open: bool,
+}
+
+impl AppWindow {
+    fn new(name: String, is_open: bool) -> Self {
+        AppWindow {
+            name,
+            is_open,
+        }
+    }
+}
 
 struct RustShot {
     curr_screenshot: Option<ImageStack>,
@@ -79,6 +89,7 @@ struct RustShot {
     shortcuts: HashMap<KeyCommand, KeyboardShortcut>,
     icons: HashMap<String, Result<RetainedImage, String>>,
     tooltips: HashMap<String, String>,
+    shape_window_open: bool,
 }
 
 /// Load in the application state the svg icons as RetainedImage, and also the correspondence between the backend name of the icon and its tooltip.
@@ -150,6 +161,11 @@ fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<Stri
         RetainedImage::from_svg_bytes("crop", include_bytes!("../../resources/crop.svg")),
     );
     tooltips_map.insert("crop".to_string(), "Crop".to_string());
+    icons_map.insert(
+        "pentagon".to_string(),
+        RetainedImage::from_svg_bytes("pentagon", include_bytes!("../../resources/pentagon.svg")),
+    );
+    tooltips_map.insert("pentagon".to_string(), "Shape".to_string());
     return (icons_map, tooltips_map);
 }
 
@@ -211,6 +227,7 @@ impl RustShot {
             shortcuts: map,
             icons: icons_map,
             tooltips: tooltips_map,
+            shape_window_open : false,
         }
     }
 
@@ -270,8 +287,8 @@ impl RustShot {
                             self.copy_image();
                         }
                     }
-                }
-                else if self.action == Action::Paint {
+                } else if self.action == Action::Paint {
+
                     self.render_paint_tools(ctx, ui);
                 }
             })
@@ -308,6 +325,41 @@ impl RustShot {
                 ScrollArea::both().show(ui, |ui| ui.label("No screenshots yet"));
             }
         });
+    }
+
+
+
+    fn render_shape_window(&mut self, ctx:&Context, ui:&mut Ui) {
+        Window::new("Choose the shape").title_bar(false).
+            show(ctx, |ui| {
+                ui.group( |ui| {
+                    ui.horizontal(|ui|  {
+                    let hollow_rect_btn = self.icon_button("square", ctx, ui);
+                    let filled_rect_btn = self.icon_button("square-fill", ctx, ui);
+                    let hollow_circle_btn = self.icon_button("circle", ctx, ui);
+                    let filled_circle_btn = self.icon_button("circle-fill", ctx, ui);
+                    let arrow_btn = self.icon_button("arrow-up-right", ctx, ui);
+                    if hollow_rect_btn.clicked() {
+                        self.paint_info.curr_tool = Tool::HollowRect;
+                    }
+                    if filled_rect_btn.clicked() {
+                        self.paint_info.curr_tool = Tool::FilledRect;
+                    }
+                    if hollow_circle_btn.clicked() {
+                        self.paint_info.curr_tool = Tool::HollowCircle;
+                    }
+                    if filled_circle_btn.clicked() {
+                        self.paint_info.curr_tool = Tool::FilledCircle;
+                    }
+                    if arrow_btn.clicked() {
+                        self.paint_info.curr_tool = Tool::Arrow;
+                    }
+                    let close_btn = self.icon_button("x", ctx, ui);
+                    if close_btn.clicked() {
+                        self.shape_window_open = false;
+                    }});
+                });
+            });
     }
 
     /// Used to restore state of the screenshot when undoing paint changes
@@ -391,7 +443,7 @@ impl RustShot {
     }
 
     /// Renders an ImageButton using the svg corresponding to the given name, if the svg failed to load or the name does not correspond to any svg, it spawns a button with the name passed as parameter to icon_button
-    fn icon_button(&mut self, name: &str, ctx: &Context, ui: &mut Ui) -> Response {
+    fn icon_button(&self, name: &str, ctx: &Context, ui: &mut Ui) -> Response {
         match self.icons.get(name) {
             Some(val) => match val {
                 Ok(image) => ui
@@ -404,7 +456,7 @@ impl RustShot {
     }
 
     /// Renders an icon using the svg corresponding to the given name, if the svg failed to load or the name does not correspond to any svg, it spawns a button with the name passed as parameter to icon
-    fn icon(&mut self, name: &str, ctx: &Context, ui: &mut Ui) -> Response {
+    fn icon(&self, name: &str, ctx: &Context, ui: &mut Ui) -> Response {
         match self.icons.get(name) {
             Some(val) => match val {
                 Ok(image) => ui
@@ -418,20 +470,18 @@ impl RustShot {
 
     /// Renders painting annotation tools when in paint mode
     fn render_paint_tools(&mut self, ctx: &Context, ui: &mut Ui) {
+        if self.shape_window_open {
+            self.render_shape_window(ctx, ui);
+        }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             let save_paint_btn = ui.add(Button::new("Save changes"));
             let undo_paint_btn = ui.add(Button::new("Undo changes"));
             let draw_btn = self.icon_button("pencil-fill", ctx, ui);
-            let hollow_rect_btn = self.icon_button("square", ctx, ui);
-            let filled_rect_btn = self.icon_button("square-fill", ctx, ui);
-            let hollow_circle_btn = self.icon_button("circle", ctx, ui);
-            let filled_circle_btn = self.icon_button("circle-fill", ctx, ui);
-            let arrow_btn = self.icon_button("arrow-up-right", ctx, ui);
-            let highligher_btn = self.icon_button("pen-fill", ctx, ui);
+            let highlighter_btn = self.icon_button("pen-fill", ctx, ui);
+            let shape_btn = self.icon_button("pentagon", ctx, ui);
             let crop_btn = self.icon_button("crop", ctx, ui);
             let eraser_btn = self.icon_button("eraser-fill", ctx, ui);
             let rmv_tool_btn = self.icon_button("x-octagon", ctx, ui);
-            ui.color_edit_button_srgba_unmultiplied(&mut self.paint_info.curr_color);
             ui.label("Current tool:");
             let curr_tool = match self.paint_info.curr_tool {
                 Tool::Drawing => self.icon("pencil-fill", ctx, ui),
@@ -443,9 +493,12 @@ impl RustShot {
                 Tool::Eraser => self.icon("eraser-fill", ctx, ui),
                 Tool::Highlighter => self.icon("pen-fill", ctx, ui),
                 Tool::Crop => self.icon("crop", ctx, ui),
-                Tool::None => ui.add(Label::new("No tool selected")),
+                Tool::None => ui.add(Label::new("None")),
             };
-            ui.add(Slider::new(&mut self.paint_info.curr_thickness, 0..=30));
+            if self.paint_info.curr_tool != Tool::None && self.paint_info.curr_tool != Tool::Crop{
+                ui.color_edit_button_srgba_unmultiplied(&mut self.paint_info.curr_color);
+                ui.add(Slider::new(&mut self.paint_info.curr_thickness, 0..=30));
+            }
             if rmv_tool_btn.clicked() {
                 self.paint_info.curr_tool = Tool::None;
             }
@@ -459,28 +512,16 @@ impl RustShot {
             if draw_btn.clicked() {
                 self.paint_info.curr_tool = Tool::Drawing;
             }
-            if hollow_rect_btn.clicked() {
-                self.paint_info.curr_tool = Tool::HollowRect;
+            if shape_btn.clicked() {
+                self.shape_window_open = true;
             }
-            if filled_rect_btn.clicked() {
-                self.paint_info.curr_tool = Tool::FilledRect;
-            }
-            if hollow_circle_btn.clicked() {
-                self.paint_info.curr_tool = Tool::HollowCircle;
-            }
-            if filled_circle_btn.clicked() {
-                self.paint_info.curr_tool = Tool::FilledCircle;
-            }
-            if arrow_btn.clicked() {
-                self.paint_info.curr_tool = Tool::Arrow;
-            }
-            if highligher_btn.clicked() {
+            if highlighter_btn.clicked() {
                 self.paint_info.curr_tool = Tool::Highlighter;
             }
-            if crop_btn.clicked(){
+            if crop_btn.clicked() {
                 self.paint_info.curr_tool = Tool::Crop;
             }
-            if eraser_btn.clicked(){
+            if eraser_btn.clicked() {
                 self.paint_info.curr_tool = Tool::Eraser;
             }
         });
@@ -515,7 +556,6 @@ impl RustShot {
                 self.paint_info.last_ptr = self.paint_info.curr_ptr;
             }
             curr_screenshot.set_tmp_image(screen_to_paint.clone());
-
         } else if img.drag_released() {
             if self.paint_info.curr_tool == Tool::Crop {
                 self.paint_info.curr_ptr =
@@ -545,8 +585,7 @@ impl RustShot {
                 curr_screenshot.stack_image(new_screen);
                 self.action = Action::None;
                 self.save_paint_changes();
-            }
-            else {
+            } else {
                 curr_screenshot.stack_image(curr_screenshot.get_tmp_image());
             }
             self.paint_info.soft_reset();

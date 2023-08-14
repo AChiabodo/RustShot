@@ -76,20 +76,19 @@ impl PaintState {
                 start_ptr.y = self.curr_ptr.y;
             }
         }
-        let mut new_screen = img.clone();
         match self.curr_tool {
             Tool::Drawing => {
                 draw_thick_line(img, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness, self.curr_color.into());
             }
             Tool::HollowRect => {
-                drawing::draw_hollow_rect_mut(img, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color.into());
+                draw_thick_hollow_rect_mut(img, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_thickness, self.curr_color.into());
             }
             Tool::FilledRect => {
                 drawing::draw_filled_rect_mut(img, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color.into());
             }
             Tool::HollowCircle => {
                 let radius = ((width.pow(2) + height.pow(2)) as f64).sqrt() as i32;
-                drawing::draw_hollow_circle_mut(img, (start_ptr.x as i32, start_ptr.y as i32), radius, self.curr_color.into());
+                draw_thick_hollow_circle_mut(img, (start_ptr.x as i32, start_ptr.y as i32), radius, self.curr_thickness, self.curr_color.into());
             }
             Tool::FilledCircle => {
                 let radius = ((width.pow(2) + height.pow(2)) as f64).sqrt() as i32;
