@@ -152,10 +152,10 @@ fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<Stri
     );
     tooltips_map.insert("x-octagon".to_string(), "Stop using this tool".to_string());
     icons_map.insert(
-        "pen-fill".to_string(),
-        RetainedImage::from_svg_bytes("pen-fill", include_bytes!("../../resources/pen-fill.svg")),
+        "highlighter-solid".to_string(),
+        RetainedImage::from_svg_bytes("highlighter-solid", include_bytes!("../../resources/highlighter-solid.svg")),
     );
-    tooltips_map.insert("pen-fill".to_string(), "Highlight".to_string());
+    tooltips_map.insert("highlighter-solid".to_string(), "Highlight".to_string());
     icons_map.insert(
         "crop".to_string(),
         RetainedImage::from_svg_bytes("crop", include_bytes!("../../resources/crop.svg")),
@@ -477,7 +477,7 @@ impl RustShot {
             let save_paint_btn = ui.add(Button::new("Save changes"));
             let undo_paint_btn = ui.add(Button::new("Undo changes"));
             let draw_btn = self.icon_button("pencil-fill", ctx, ui);
-            let highlighter_btn = self.icon_button("pen-fill", ctx, ui);
+            let highlighter_btn = self.icon_button("highlighter-solid", ctx, ui);
             let shape_btn = self.icon_button("pentagon", ctx, ui);
             let crop_btn = self.icon_button("crop", ctx, ui);
             let eraser_btn = self.icon_button("eraser-fill", ctx, ui);
@@ -491,7 +491,7 @@ impl RustShot {
                 Tool::FilledCircle => self.icon("circle-fill", ctx, ui),
                 Tool::Arrow => self.icon("arrow-up-right", ctx, ui),
                 Tool::Eraser => self.icon("eraser-fill", ctx, ui),
-                Tool::Highlighter => self.icon("pen-fill", ctx, ui),
+                Tool::Highlighter => self.icon("highlighter-solid", ctx, ui),
                 Tool::Crop => self.icon("crop", ctx, ui),
                 Tool::None => ui.add(Label::new("None")),
             };
