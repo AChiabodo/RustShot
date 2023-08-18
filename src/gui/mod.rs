@@ -166,6 +166,16 @@ fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<Stri
         RetainedImage::from_svg_bytes("pentagon", include_bytes!("../../resources/pentagon.svg")),
     );
     tooltips_map.insert("pentagon".to_string(), "Shape".to_string());
+    icons_map.insert(
+        "arrow-clockwise".to_string(),
+        RetainedImage::from_svg_bytes("arrow-clockwise", include_bytes!("../../resources/arrow-clockwise.svg")),
+    );
+    tooltips_map.insert("arrow-clockwise".to_string(), "Redo last action".to_string());
+    icons_map.insert(
+        "arrow-counterclockwise".to_string(),
+        RetainedImage::from_svg_bytes("arrow-counterclockwise", include_bytes!("../../resources/arrow-counterclockwise.svg")),
+    );
+    tooltips_map.insert("arrow-counterclockwise".to_string(), "Undo last action".to_string());
     return (icons_map, tooltips_map);
 }
 
@@ -473,9 +483,8 @@ impl RustShot {
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             let save_paint_btn = ui.add(Button::new("Save changes"));
-            let undo_paint_btn = ui.add(Button::new("Undo changes"));
             if self.curr_screenshot.as_ref().unwrap().get_images_len() > 1 {
-                let undo_btn = self.icon_button("undo", true, ctx, ui);
+                let undo_btn = self.icon_button("arrow-counterclockwise", true, ctx, ui);
                 if undo_btn.clicked() {
                     let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
                     let img = curr_screenshot.pop_last_image();
@@ -485,10 +494,10 @@ impl RustShot {
                 }
             }
             else {
-                let undo_btn = self.icon_button("undo",  false, ctx, ui);
+                let undo_btn = self.icon_button("arrow-counterclockwise",  false, ctx, ui);
             }
             if self.curr_screenshot.as_ref().unwrap().get_redo_images_len() > 0 {
-                let redo_btn = self.icon_button("redo", true, ctx, ui);
+                let redo_btn = self.icon_button("arrow-clockwise", true, ctx, ui);
                 if redo_btn.clicked() {
                     let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
                     let img = curr_screenshot.pop_redo_image().unwrap();
@@ -497,7 +506,7 @@ impl RustShot {
                 }
             }
             else {
-                let redo_btn = self.icon_button("redo", false, ctx, ui);
+                let redo_btn = self.icon_button("arrow-clockwise", false, ctx, ui);
             }
             let draw_btn = self.icon_button("pencil-fill", true, ctx, ui);
             let highlighter_btn = self.icon_button("highlighter-solid", true, ctx, ui);
@@ -528,9 +537,6 @@ impl RustShot {
             if save_paint_btn.clicked() {
                 self.action = Action::None;
                 self.save_paint_changes();
-            }
-            if undo_paint_btn.clicked() {
-                self.restore_from_paint();
             }
             if draw_btn.clicked() {
                 self.paint_info.curr_tool = Tool::Drawing;
