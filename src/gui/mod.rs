@@ -458,10 +458,10 @@ impl RustShot {
                 Tool::Eraser => screen_to_paint = curr_screenshot.get_tmp_image(),
                 _ => {}
             }
-            let mut tmp = curr_screenshot.get_last_image();
-            if self.paint_info.curr_tool == Tool::Eraser {
-                tmp = curr_screenshot.get_first_image();
-            }
+            let tmp = match self.paint_info.curr_tool {
+                Tool::Eraser => curr_screenshot.get_first_image(),
+                _ => curr_screenshot.get_last_image()
+            };
             self.paint_info.draw_shape(&mut screen_to_paint, &tmp);
             if self.paint_info.curr_tool == Tool::Drawing || self.paint_info.curr_tool == Tool::Highlighter || self.paint_info.curr_tool == Tool::Eraser {
                 self.paint_info.last_ptr = self.paint_info.curr_ptr;
