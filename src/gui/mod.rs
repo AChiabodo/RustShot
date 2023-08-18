@@ -1,9 +1,11 @@
 mod image_proc_extra_mod;
 mod editing_mod;
+mod config_mod;
 
 use crate::screen::{self, take_screenshot};
 use crate::gui::image_proc_extra_mod::*;
 use crate::gui::editing_mod::*;
+use crate::gui::config_mod::*;
 
 use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, CursorIcon, ImageButton, InputState, Key, KeyboardShortcut, Label, Layout, Modifiers, Pos2, Rect, Response, ScrollArea, Sense, Shape, Slider, TextureId, TopBottomPanel, Ui, Vec2, Window};
 use arboard::Clipboard;
@@ -53,14 +55,6 @@ enum Action {
 }
 
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
-enum KeyCommand {
-    SaveScreenshot,
-    TakeScreenshot,
-    Crop,
-    Paint,
-    None,
-}
 
 struct AppWindow {
     name: String,
@@ -92,100 +86,6 @@ struct RustShot {
     shape_window_open: bool,
 }
 
-/// Load in the application state the svg icons as RetainedImage, and also the correspondence between the backend name of the icon and its tooltip.
-fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<String, String>, ) {
-    let mut icons_map = HashMap::new();
-    let mut tooltips_map = HashMap::new();
-    icons_map.insert(
-        "pencil-fill".to_string(),
-        RetainedImage::from_svg_bytes(
-            "pencil-fill",
-            include_bytes!("../../resources/pencil-fill.svg"),
-        ),
-    );
-    tooltips_map.insert("pencil-fill".to_string(), "Pencil".to_string());
-    icons_map.insert(
-        "square-fill".to_string(),
-        RetainedImage::from_svg_bytes(
-            "square-fill",
-            include_bytes!("../../resources/square-fill.svg"),
-        ),
-    );
-    tooltips_map.insert("square-fill".to_string(), "Filled Rectangle".to_string());
-    icons_map.insert(
-        "square".to_string(),
-        RetainedImage::from_svg_bytes("square", include_bytes!("../../resources/square.svg")),
-    );
-    tooltips_map.insert("square".to_string(), "Hollow Rectangle".to_string());
-    icons_map.insert(
-        "circle-fill".to_string(),
-        RetainedImage::from_svg_bytes(
-            "circle-fill",
-            include_bytes!("../../resources/circle-fill.svg"),
-        ),
-    );
-    tooltips_map.insert("circle-fill".to_string(), "Filled Circle".to_string());
-    icons_map.insert(
-        "circle".to_string(),
-        RetainedImage::from_svg_bytes("circle", include_bytes!("../../resources/circle.svg")),
-    );
-    tooltips_map.insert("circle".to_string(), "Hollow Circle".to_string());
-    icons_map.insert(
-        "arrow-up-right".to_string(),
-        RetainedImage::from_svg_bytes(
-            "arrow-up-right",
-            include_bytes!("../../resources/arrow-up-right.svg"),
-        ),
-    );
-    tooltips_map.insert("arrow-up-right".to_string(), "Arrow".to_string());
-    icons_map.insert(
-        "eraser-fill".to_string(),
-        RetainedImage::from_svg_bytes(
-            "eraser-fill",
-            include_bytes!("../../resources/eraser-fill.svg"),
-        ),
-    );
-    tooltips_map.insert("eraser-fill".to_string(), "Eraser".to_string());
-    icons_map.insert(
-        "x-octagon".to_string(),
-        RetainedImage::from_svg_bytes("x-octagon", include_bytes!("../../resources/x-octagon.svg")),
-    );
-    tooltips_map.insert("x-octagon".to_string(), "Stop using this tool".to_string());
-    icons_map.insert(
-        "highlighter-solid".to_string(),
-        RetainedImage::from_svg_bytes("highlighter-solid", include_bytes!("../../resources/highlighter-solid.svg")),
-    );
-    tooltips_map.insert("highlighter-solid".to_string(), "Highlight".to_string());
-    icons_map.insert(
-        "crop".to_string(),
-        RetainedImage::from_svg_bytes("crop", include_bytes!("../../resources/crop.svg")),
-    );
-    tooltips_map.insert("crop".to_string(), "Crop".to_string());
-    icons_map.insert(
-        "pentagon".to_string(),
-        RetainedImage::from_svg_bytes("pentagon", include_bytes!("../../resources/pentagon.svg")),
-    );
-    tooltips_map.insert("pentagon".to_string(), "Shape".to_string());
-    icons_map.insert(
-        "arrow-clockwise".to_string(),
-        RetainedImage::from_svg_bytes("arrow-clockwise", include_bytes!("../../resources/arrow-clockwise.svg")),
-    );
-    tooltips_map.insert("arrow-clockwise".to_string(), "Redo last action".to_string());
-    icons_map.insert(
-        "arrow-counterclockwise".to_string(),
-        RetainedImage::from_svg_bytes("arrow-counterclockwise", include_bytes!("../../resources/arrow-counterclockwise.svg")),
-    );
-    tooltips_map.insert("arrow-counterclockwise".to_string(), "Undo last action".to_string());
-    icons_map.insert(
-        "clipboard".to_string(),
-        RetainedImage::from_svg_bytes(
-            "clipboard",
-            include_bytes!("../../resources/clipboard.svg"),
-        ),
-    );
-    tooltips_map.insert("clipboard".to_string(), "Copy image to clipboard".to_string());
-    return (icons_map, tooltips_map);
-}
 
 impl RustShot {
     fn new(cc: &eframe::CreationContext<'_>) -> Self {
@@ -194,35 +94,6 @@ impl RustShot {
         // Use the cc.gl (a glow::Context) to create graphics shaders and buffers that you can use
         // for e.g. egui::PaintCallback.
         let (tx, rx) = channel();
-        let mut map = HashMap::new();
-        map.insert(
-            KeyCommand::SaveScreenshot,
-            KeyboardShortcut {
-                modifiers: Modifiers::CTRL,
-                key: Key::S,
-            },
-        );
-        map.insert(
-            KeyCommand::TakeScreenshot,
-            KeyboardShortcut {
-                modifiers: Modifiers::CTRL,
-                key: Key::T,
-            },
-        );
-        map.insert(
-            KeyCommand::Crop,
-            KeyboardShortcut {
-                modifiers: Modifiers::CTRL,
-                key: Key::C,
-            },
-        );
-        map.insert(
-            KeyCommand::Paint,
-            KeyboardShortcut {
-                modifiers: Modifiers::CTRL,
-                key: Key::P,
-            },
-        );
         let (icons_map, tooltips_map) = load_icons();
         RustShot {
             curr_screenshot: None,
@@ -242,7 +113,7 @@ impl RustShot {
             timer: Some(0),
             allowed_to_close: true,
             show_confirmation_dialog: false,
-            shortcuts: map,
+            shortcuts: load_shortcuts(),
             icons: icons_map,
             tooltips: tooltips_map,
             shape_window_open : false,
@@ -260,7 +131,7 @@ impl RustShot {
                         let paint_btn = ui.add(Button::new("Edit"));
                         if paint_btn.clicked()
                             || ctx.input_mut(|i| {
-                            i.consume_shortcut(self.shortcuts.get(&KeyCommand::Paint).unwrap())
+                            i.consume_shortcut(self.shortcuts.get(&KeyCommand::Edit).unwrap())
                         })
                         {
                             self.action = Action::Paint;
@@ -495,7 +366,7 @@ impl RustShot {
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             let save_paint_btn = ui.add(Button::new("Save changes"));
             if self.curr_screenshot.as_ref().unwrap().get_images_len() > 1 {
-                let undo_btn = self.icon_button("arrow-counterclockwise", true, ctx, ui);
+                let undo_btn = self.icon_button("arrow-90deg-left", true, ctx, ui);
                 if undo_btn.clicked() {
                     let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
                     let img = curr_screenshot.pop_last_image();
@@ -505,10 +376,10 @@ impl RustShot {
                 }
             }
             else {
-                let undo_btn = self.icon_button("arrow-counterclockwise",  false, ctx, ui);
+                let undo_btn = self.icon_button("arrow-90deg-left",  false, ctx, ui);
             }
             if self.curr_screenshot.as_ref().unwrap().get_redo_images_len() > 0 {
-                let redo_btn = self.icon_button("arrow-clockwise", true, ctx, ui);
+                let redo_btn = self.icon_button("arrow-90deg-right", true, ctx, ui);
                 if redo_btn.clicked() {
                     let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
                     let img = curr_screenshot.pop_redo_image().unwrap();
@@ -517,7 +388,7 @@ impl RustShot {
                 }
             }
             else {
-                let redo_btn = self.icon_button("arrow-clockwise", false, ctx, ui);
+                let redo_btn = self.icon_button("arrow-90deg-right", false, ctx, ui);
             }
             let draw_btn = self.icon_button("pencil-fill", true, ctx, ui);
             let highlighter_btn = self.icon_button("highlighter-solid", true, ctx, ui);
