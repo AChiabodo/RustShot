@@ -176,6 +176,14 @@ fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<Stri
         RetainedImage::from_svg_bytes("arrow-counterclockwise", include_bytes!("../../resources/arrow-counterclockwise.svg")),
     );
     tooltips_map.insert("arrow-counterclockwise".to_string(), "Undo last action".to_string());
+    icons_map.insert(
+        "clipboard".to_string(),
+        RetainedImage::from_svg_bytes(
+            "clipboard",
+            include_bytes!("../../resources/clipboard.svg"),
+        ),
+    );
+    tooltips_map.insert("clipboard".to_string(), "Copy image to clipboard".to_string());
     return (icons_map, tooltips_map);
 }
 
@@ -247,6 +255,17 @@ impl RustShot {
                 if self.action == Action::None {
                     let screenshot_btn = ui.add(Button::new("Take Screenshot"));
                     let screenshot_save_btn = ui.add(Button::new("Save Screenshot"));
+                    //Spawn edit only if screenshot is available
+                    if self.curr_screenshot.is_some() {
+                        let paint_btn = ui.add(Button::new("Edit"));
+                        if paint_btn.clicked()
+                            || ctx.input_mut(|i| {
+                            i.consume_shortcut(self.shortcuts.get(&KeyCommand::Paint).unwrap())
+                        })
+                        {
+                            self.action = Action::Paint;
+                        }
+                    }
                     let combo_box = ComboBox::from_label("")
                         .width(80.0)
                         .selected_text(format!("🕓 {:?} sec", self.timer.unwrap()))
@@ -282,17 +301,9 @@ impl RustShot {
                         }
                     }
 
-                    //Spawn paint only if screenshot is already available
+                    //Spawn clipboard only if screenshot is already available
                     if self.curr_screenshot.is_some() {
-                        let paint_btn = ui.add(Button::new("Edit"));
-                        let copy_btn = ui.add(Button::new("Copy"));
-                        if paint_btn.clicked()
-                            || ctx.input_mut(|i| {
-                            i.consume_shortcut(self.shortcuts.get(&KeyCommand::Paint).unwrap())
-                        })
-                        {
-                            self.action = Action::Paint;
-                        }
+                        let copy_btn = self.icon_button("clipboard", true, ctx, ui);
                         if copy_btn.clicked() {
                             self.copy_image();
                         }
