@@ -409,8 +409,10 @@ impl RustShot {
                 Tool::Crop => self.icon("crop", ctx, ui),
                 Tool::None => ui.add(Label::new("None")),
             };
-            if self.paint_info.curr_tool != Tool::None && self.paint_info.curr_tool != Tool::Crop{
+            if self.paint_info.curr_tool != Tool::None && self.paint_info.curr_tool != Tool::Crop && self.paint_info.curr_tool != Tool::Eraser{
                 ui.color_edit_button_srgba_unmultiplied(&mut self.paint_info.curr_color);
+            }
+            if self.paint_info.curr_tool != Tool::None && self.paint_info.curr_tool != Tool::Crop{
                 ui.add(Slider::new(&mut self.paint_info.curr_thickness, 0..=30));
             }
             if rmv_tool_btn.clicked() {
