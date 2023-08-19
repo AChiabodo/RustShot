@@ -166,7 +166,7 @@ impl RustShot {
                     {
                         match &self.curr_screenshot {
                             Some(screenshot) => {
-                                save_screenshot(&screenshot.get_final_image());
+                                save_screenshot(&screenshot.get_final_image().get_image());
                             }
                             None => {}
                         }
@@ -192,8 +192,8 @@ impl RustShot {
             //If screenshot is already available, then show it on the GUI
             Some(screenshot) => {
                 let screenshot = match self.action {
-                    Action::None => screenshot.get_final_image(),
-                    Action::Paint => screenshot.get_tmp_image(),
+                    Action::None => screenshot.get_final_image().get_image(),
+                    Action::Paint => screenshot.get_tmp_image().get_image(),
                 };
                 ScrollArea::both().show(ui, |ui| {
                     let retained_img = RetainedImage::from_color_image(
@@ -271,7 +271,7 @@ impl RustShot {
 
     fn copy_image(&mut self) {
         let mut clipboard = Clipboard::new().unwrap();
-        let final_image = self.curr_screenshot.as_ref().unwrap().get_final_image();
+        let final_image = self.curr_screenshot.as_ref().unwrap().get_final_image().get_image();
         let bytes = final_image.as_bytes();
         let img = arboard::ImageData {
             width: final_image.width() as usize,
@@ -464,7 +464,7 @@ impl RustShot {
                 Tool::Eraser => curr_screenshot.get_first_image(),
                 _ => curr_screenshot.get_last_image()
             };
-            self.paint_info.draw_shape(&mut screen_to_paint, &tmp);
+            self.paint_info.apply_tool(&mut screen_to_paint);
             if self.paint_info.curr_tool == Tool::Drawing || self.paint_info.curr_tool == Tool::Highlighter || self.paint_info.curr_tool == Tool::Eraser {
                 self.paint_info.last_ptr = self.paint_info.curr_ptr;
             }
@@ -489,15 +489,22 @@ impl RustShot {
                 if self.paint_info.curr_ptr.y < self.paint_info.last_ptr.y {
                     start_ptr.y = self.paint_info.curr_ptr.y;
                 }
-                let new_screen = curr_screenshot.get_tmp_image().crop_imm(
+                let new_screen = curr_screenshot.get_tmp_image().get_image().crop_imm(
                     start_ptr.x as u32,
                     start_ptr.y as u32,
                     width as u32,
                     height as u32,
                 );
-                curr_screenshot.stack_image(new_screen);
-                self.action = Action::None;
-                self.save_paint_changes();
+                let eraser_screen = curr_screenshot.get_last_image().get_image().crop_imm(
+                    start_ptr.x as u32,
+                    start_ptr.y as u32,
+                    width as u32,
+                    height as u32,
+                );
+                let img = editing_mod::Image::new(new_screen, eraser_screen);
+                curr_screenshot.stack_image(img.clone());
+                curr_screenshot.set_tmp_image(img);
+
             } else {
                 curr_screenshot.stack_image(curr_screenshot.get_tmp_image());
             }
