@@ -491,7 +491,7 @@ impl RustShot {
                 if self.paint_info.curr_ptr.y < self.paint_info.last_ptr.y {
                     start_ptr.y = self.paint_info.curr_ptr.y;
                 }
-                let curr_img = curr_screenshot.get_tmp_image();
+                let curr_img = curr_screenshot.get_last_image();
                 let new_screen = curr_img.get_image().crop_imm(
                     start_ptr.x as u32,
                     start_ptr.y as u32,
