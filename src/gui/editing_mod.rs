@@ -1,7 +1,7 @@
-
 use crate::gui::image_proc_extra_mod::*;
 use std::cmp::max;
 use std::collections::VecDeque;
+use std::ops::Index;
 use eframe::egui::Pos2;
 use image::DynamicImage;
 use imageproc::drawing;
@@ -23,10 +23,10 @@ pub enum Tool {
 enum Shape {
     Pencil { points: Vec<(usize, usize)>, thickness: usize },
     Highlighter { points: Vec<(usize, usize)>, thickness: usize },
-    HollowRect { point: (usize, usize), width: usize, height: usize},
-    FilledRect { point: (usize, usize), width: usize, height: usize},
-    HollowCircle { center: (usize, usize), radius: usize},
-    FilledCircle { center: (usize, usize), radius: usize},
+    HollowRect { point: (usize, usize), width: usize, height: usize },
+    FilledRect { point: (usize, usize), width: usize, height: usize },
+    HollowCircle { center: (usize, usize), radius: usize },
+    FilledCircle { center: (usize, usize), radius: usize },
 }
 
 pub struct DrawObject {
@@ -63,7 +63,7 @@ impl PaintState {
     }
 
     ///Draw a shape on the given img based on the field inside [self] ([curr_tool], [curr_color], [last_ptr], [curr_ptr])
-    pub fn apply_tool(&self, img: &mut Image) {
+    pub fn apply_tool(&self, img: &mut Image, original_img: DynamicImage) {
         let mut start_ptr = self.last_ptr;
         let width = max(1, (self.curr_ptr.x - self.last_ptr.x).abs() as i32);
         let height = max(1, (self.curr_ptr.y - self.last_ptr.y).abs() as i32);
@@ -98,13 +98,13 @@ impl PaintState {
                 draw_arrow(&mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness, self.curr_color.into());
             }
             Tool::Highlighter => {
-                highlight_line(&img.eraser_image, &mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness, self.curr_color.into());
+                highlight_line(&original_img, &mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness, self.curr_color.into());
             }
             Tool::Crop => {
                 drawing::draw_hollow_rect_mut(&mut img.image, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), self.curr_color.into());
             }
             Tool::Eraser => {
-                erase_thick_line(&img.eraser_image, &mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness);
+                erase_thick_line(&original_img, &mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness);
             }
             _ => {}
         }
@@ -115,41 +115,58 @@ impl PaintState {
 #[derive(Clone)]
 pub struct Image {
     image: DynamicImage,
-    eraser_image: DynamicImage,
+    crop_index: usize,
 }
 
 impl Image {
-    pub fn new(image:DynamicImage, eraser_image: DynamicImage) -> Self {
-        Image { image, eraser_image}
+    pub fn new(image: DynamicImage, crop_index: usize) -> Self {
+        Image { image, crop_index }
     }
     pub fn get_image(&self) -> DynamicImage {
         self.image.clone()
     }
 
-    pub fn get_eraser_image(&self) -> DynamicImage {
-        self.eraser_image.clone()
+    pub fn get_crop_index(&self) -> usize {
+        self.crop_index
     }
+
+
+
 }
 
 pub struct ImageStack {
     images: VecDeque<Image>,
     redo_images: VecDeque<Image>,
+    crop_images: Vec<DynamicImage>,
     tmp_image: Image,
     final_image: Image,
-    curr_last_crop: Image,
 }
 
 impl ImageStack {
-    pub fn new(image: DynamicImage)-> Self{
+    pub fn new(image: DynamicImage) -> Self {
         let mut images = VecDeque::new();
-        images.push_front(Image{image: image.clone(), eraser_image: image.clone()});
+        images.push_front(Image::new(image.clone(), 0));
+        let mut crop_images = Vec::new();
+        crop_images.push(image.clone());
         ImageStack {
             images,
             redo_images: VecDeque::new(),
-            tmp_image: Image{image: image.clone(), eraser_image: image.clone()},
-            final_image: Image{image: image.clone(), eraser_image: image.clone()},
-            curr_last_crop: Image{image: image.clone(), eraser_image: image.clone()},
+            crop_images,
+            tmp_image: Image::new(image.clone(), 0),
+            final_image: Image::new(image.clone(), 0),
         }
+    }
+
+    pub fn push_crop_image(&mut self, image: DynamicImage) {
+        self.crop_images.push(image);
+    }
+
+    pub fn get_crop_image(&self, index:usize) -> DynamicImage {
+        self.crop_images[index].clone()
+    }
+
+    pub fn get_crop_images_len(&self) -> usize {
+        self.crop_images.len()
     }
 
     /// Push a new image to the redo_images stack
@@ -172,43 +189,43 @@ impl ImageStack {
 
     /// Pop the last stacked image in the image stack, removing it. Returns [final image] if the stack is empty
     pub fn pop_last_image(&mut self) -> Image {
-        match self.images.pop_front(){
+        match self.images.pop_front() {
             Some(img) => img,
             None => self.final_image.clone()
         }
     }
 
     ///Get the width of the final image
-    pub fn get_width (&self) -> usize {
+    pub fn get_width(&self) -> usize {
         return self.final_image.image.width() as usize;
     }
 
     ///Get the height of the final image
-    pub fn get_height (&self) -> usize {
+    pub fn get_height(&self) -> usize {
         return self.final_image.image.height() as usize;
     }
 
     /// Get the last stacked image in the image stack, without removing it. Returns [final image] if the stack is empty
     pub fn get_last_image(&self) -> Image {
-        match self.images.front(){
+        match self.images.front() {
             Some(img) => (*img).clone(),
             None => self.final_image.clone()
         }
     }
 
     /// Get the first stacked image in the image stack, without removing it. Returns [final image] if the stack is empty
-    pub fn get_first_image (&self) -> Image {
-        match self.images.back(){
+    pub fn get_first_image(&self) -> Image {
+        match self.images.back() {
             Some(img) => (*img).clone(),
             None => self.final_image.clone()
         }
     }
 
-    pub fn get_tmp_image (&self) -> Image {
+    pub fn get_tmp_image(&self) -> Image {
         return self.tmp_image.clone();
     }
 
-    pub fn set_tmp_image (&mut self, image: Image) {
+    pub fn set_tmp_image(&mut self, image: Image) {
         self.tmp_image = image.clone();
     }
 
@@ -231,7 +248,7 @@ impl ImageStack {
     }
 
     /// Save all changes made based on the current last image in the stack
-    pub fn save_changes (&mut self) {
+    pub fn save_changes(&mut self) {
         self.final_image = self.get_last_image();
         self.tmp_image = self.get_last_image();
         self.images.clear();
@@ -240,13 +257,11 @@ impl ImageStack {
     }
 
     /// Get the final image
-    pub fn get_final_image (&self) -> Image {
+    pub fn get_final_image(&self) -> Image {
         self.final_image.clone()
     }
 
     pub fn set_final_image(&mut self, image: Image) {
         self.final_image = image;
     }
-
-
 }

@@ -460,11 +460,13 @@ impl RustShot {
                 Tool::Eraser => screen_to_paint = curr_screenshot.get_tmp_image(),
                 _ => {}
             }
+            // When using Eraser, i need the latest clean version of the cropped image, when highlighting only the latest version of the image
             let tmp = match self.paint_info.curr_tool {
-                Tool::Eraser => curr_screenshot.get_first_image(),
-                _ => curr_screenshot.get_last_image()
+                Tool::Eraser => curr_screenshot.get_crop_image(screen_to_paint.get_crop_index()),
+                Tool::Highlighter => curr_screenshot.get_last_image().get_image(),
+                _ => curr_screenshot.get_last_image().get_image(),
             };
-            self.paint_info.apply_tool(&mut screen_to_paint);
+            self.paint_info.apply_tool(&mut screen_to_paint, tmp);
             if self.paint_info.curr_tool == Tool::Drawing || self.paint_info.curr_tool == Tool::Highlighter || self.paint_info.curr_tool == Tool::Eraser {
                 self.paint_info.last_ptr = self.paint_info.curr_ptr;
             }
@@ -489,22 +491,23 @@ impl RustShot {
                 if self.paint_info.curr_ptr.y < self.paint_info.last_ptr.y {
                     start_ptr.y = self.paint_info.curr_ptr.y;
                 }
-                let new_screen = curr_screenshot.get_tmp_image().get_image().crop_imm(
+                let curr_img = curr_screenshot.get_tmp_image();
+                let new_screen = curr_img.get_image().crop_imm(
                     start_ptr.x as u32,
                     start_ptr.y as u32,
                     width as u32,
                     height as u32,
                 );
-                let eraser_screen = curr_screenshot.get_last_image().get_image().crop_imm(
+                let crop_image = curr_screenshot.get_crop_image(curr_img.get_crop_index()).crop_imm(
                     start_ptr.x as u32,
                     start_ptr.y as u32,
                     width as u32,
                     height as u32,
                 );
-                let img = editing_mod::Image::new(new_screen, eraser_screen);
+                let img = editing_mod::Image::new(new_screen, curr_screenshot.get_crop_images_len());
                 curr_screenshot.stack_image(img.clone());
                 curr_screenshot.set_tmp_image(img);
-
+                curr_screenshot.push_crop_image(crop_image);
             } else {
                 curr_screenshot.stack_image(curr_screenshot.get_tmp_image());
             }
