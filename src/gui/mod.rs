@@ -1,3 +1,4 @@
+mod shortcuts;
 mod image_proc_extra_mod;
 mod editing_mod;
 mod config_mod;
@@ -21,6 +22,8 @@ use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+
+use self::shortcuts::ShortcutManager;
 
 fn select_display(index: usize) -> Option<DisplayInfo> {
     /*let mut iter = screen::display_list().into_iter().enumerate();
@@ -80,7 +83,7 @@ struct RustShot {
     timer: Option<u64>,
     show_confirmation_dialog: bool,
     allowed_to_close: bool,
-    shortcuts: HashMap<KeyCommand, KeyboardShortcut>,
+    shortcuts: ShortcutManager,
     icons: HashMap<String, Result<RetainedImage, String>>,
     tooltips: HashMap<String, String>,
     shape_window_open: bool,
@@ -113,7 +116,7 @@ impl RustShot {
             timer: Some(0),
             allowed_to_close: true,
             show_confirmation_dialog: false,
-            shortcuts: load_shortcuts(),
+            shortcuts: ShortcutManager::default(),
             icons: icons_map,
             tooltips: tooltips_map,
             shape_window_open : false,
@@ -123,16 +126,14 @@ impl RustShot {
     fn render_top_panel(&mut self, ctx: &Context, frame: &mut Frame) {
         TopBottomPanel::top("top panel").show(ctx, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+                self.shortcuts.render_window(ui);
                 if self.action == Action::None {
                     let screenshot_btn = ui.add(Button::new("Take Screenshot"));
                     let screenshot_save_btn = ui.add(Button::new("Save Screenshot"));
                     //Spawn edit only if screenshot is available
                     if self.curr_screenshot.is_some() {
                         let paint_btn = ui.add(Button::new("Edit"));
-                        if paint_btn.clicked()
-                            || ctx.input_mut(|i| {
-                            i.consume_shortcut(self.shortcuts.get(&KeyCommand::Edit).unwrap())
-                        })
+                        if paint_btn.clicked() || self.shortcuts.check_shortcut(ctx, &KeyCommand::Edit)
                         {
                             self.action = Action::Paint;
                         }
@@ -147,22 +148,12 @@ impl RustShot {
                             ui.selectable_value(&mut self.timer, Some(10), "🕓 10 sec");
                         });
                     self.display_selector(ui);
-                    if screenshot_btn.clicked()
-                        || ctx.input_mut(|i| {
-                        i.consume_shortcut(
-                            self.shortcuts.get(&KeyCommand::TakeScreenshot).unwrap(),
-                        )
-                    })
+                    if screenshot_btn.clicked() || self.shortcuts.check_shortcut(ctx, &KeyCommand::TakeScreenshot)
                     {
                         self.store_screenshot(frame, ctx);
                     }
 
-                    if screenshot_save_btn.clicked()
-                        || ctx.input_mut(|i| {
-                        i.consume_shortcut(
-                            self.shortcuts.get(&KeyCommand::SaveScreenshot).unwrap(),
-                        )
-                    })
+                    if screenshot_save_btn.clicked() || self.shortcuts.check_shortcut(ctx, &KeyCommand::SaveScreenshot)
                     {
                         match &self.curr_screenshot {
                             Some(screenshot) => {
@@ -171,16 +162,19 @@ impl RustShot {
                             None => {}
                         }
                     }
-
+                    let setting_btn = ui.add(Button::new("Settings"));
+                    if setting_btn.clicked() {
+                        self.shortcuts.show_window();
+                    }
                     //Spawn clipboard only if screenshot is already available
                     if self.curr_screenshot.is_some() {
                         let copy_btn = self.icon_button("clipboard", true, ctx, ui);
-                        if copy_btn.clicked() {
+                        if copy_btn.clicked() || self.shortcuts.check_shortcut(ctx, &KeyCommand::Copy) {
                             self.copy_image();
                         }
                     }
-                } else if self.action == Action::Paint {
 
+                } else if self.action == Action::Paint {
                     self.render_paint_tools(ctx, ui);
                 }
             })

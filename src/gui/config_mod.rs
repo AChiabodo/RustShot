@@ -1,14 +1,45 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 use egui_extras::RetainedImage;
 
-#[derive(PartialEq, Eq, PartialOrd, Ord, Hash)]
+use super::shortcuts::{self, ShortcutManager};
+
+#[derive(Debug,PartialEq, Eq, PartialOrd, Ord, Hash,Clone)]
 pub enum KeyCommand {
     SaveScreenshot,
     TakeScreenshot,
-    Crop,
     Edit,
+    Copy,
     None,
+}
+
+impl KeyCommand {
+    pub fn to_string(&self) -> String {
+        match self {
+            KeyCommand::Edit => {
+                return "Edit".to_string();
+            },
+            KeyCommand::SaveScreenshot => {
+                return "Save Screenshot".to_string();
+            },
+            KeyCommand::TakeScreenshot => {
+                return "Take Screenshot".to_string();
+            },
+            KeyCommand::None => {
+                return "None".to_string();
+            },
+            KeyCommand::Copy => {
+                return "Copy".to_string();
+            },
+
+        }
+    }
+}
+
+impl Display for KeyCommand {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f,"{}",self.to_string())
+    }
 }
 
 /// Load in the application state the svg icons as RetainedImage, and also the correspondence between the backend name of the icon and its tooltip.
@@ -104,37 +135,4 @@ pub fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<
     );
     tooltips_map.insert("clipboard".to_string(), "Copy image to clipboard".to_string());
     return (icons_map, tooltips_map);
-}
-
-pub fn load_shortcuts() -> HashMap<KeyCommand, KeyboardShortcut> {
-    let mut map = HashMap::new();
-    map.insert(
-        KeyCommand::SaveScreenshot,
-        KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            key: Key::S,
-        },
-    );
-    map.insert(
-        KeyCommand::TakeScreenshot,
-        KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            key: Key::T,
-        },
-    );
-    map.insert(
-        KeyCommand::Crop,
-        KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            key: Key::C,
-        },
-    );
-    map.insert(
-        KeyCommand::Edit,
-        KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            key: Key::P,
-        },
-    );
-    return map;
 }
