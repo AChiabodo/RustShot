@@ -1,7 +1,6 @@
 use crate::gui::image_proc_extra_mod::*;
 use std::cmp::max;
 use std::collections::VecDeque;
-use std::ops::Index;
 use eframe::egui::Pos2;
 use image::DynamicImage;
 use imageproc::drawing;

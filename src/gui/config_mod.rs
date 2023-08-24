@@ -1,8 +1,5 @@
 use std::{collections::HashMap, fmt::Display};
-use eframe::egui::{Key, KeyboardShortcut, Modifiers};
 use egui_extras::RetainedImage;
-
-use super::shortcuts::{self, ShortcutManager};
 
 #[derive(Debug,PartialEq, Eq, PartialOrd, Ord, Hash,Clone)]
 pub enum KeyCommand {

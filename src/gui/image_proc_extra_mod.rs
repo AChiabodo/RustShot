@@ -146,7 +146,7 @@ pub fn erase_line_segment_mut(original_canvas:&DynamicImage, canvas: &mut Dynami
 
         if in_bounds(x, y) {
             // Get the original pixel
-            let mut pixel = GenericImageView::get_pixel(original_canvas, x as u32, y as u32);
+            let pixel = GenericImageView::get_pixel(original_canvas, x as u32, y as u32);
             canvas.draw_pixel(x as u32, y as u32, pixel);
         }
     }
@@ -196,7 +196,7 @@ pub fn erase_filled_circle_mut(original_canvas:&DynamicImage, canvas: &mut Dynam
     }
 }
 
-pub fn highlight_line(original_img:&DynamicImage, img: &mut DynamicImage, start:(f32, f32), end:(f32, f32), t: usize, mut color: [u8; 4]) {
+pub fn highlight_line(original_img:&DynamicImage, img: &mut DynamicImage, start:(f32, f32), end:(f32, f32), t: usize, color: [u8; 4]) {
     let segment = bresenham_line(start.0 as usize, start.1 as usize, end.0 as usize, end.1 as usize);
     for point in segment {
         draw_blended_filled_circle_mut(original_img,img, (point.0 as i32, point.1 as i32), t as i32, color.into());

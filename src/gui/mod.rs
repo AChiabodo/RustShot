@@ -8,12 +8,12 @@ use crate::gui::image_proc_extra_mod::*;
 use crate::gui::editing_mod::*;
 use crate::gui::config_mod::*;
 
-use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, CursorIcon, ImageButton, InputState, Key, KeyboardShortcut, Label, Layout, Modifiers, Pos2, Rect, Response, ScrollArea, Sense, Shape, Slider, TextureId, TopBottomPanel, Ui, Vec2, Window};
+use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, CursorIcon, ImageButton, Label, Layout, Pos2, Response, ScrollArea, Sense, Slider, TopBottomPanel, Ui, Window};
 use arboard::Clipboard;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
-use image::{DynamicImage, Rgb, RgbImage, Rgba, GenericImage, Pixel, GenericImageView};
+use image:: DynamicImage ;
 use rfd::FileDialog;
 use screenshots::DisplayInfo;
 use std::borrow::Cow;
@@ -26,22 +26,6 @@ use std::time::Duration;
 use self::shortcuts::ShortcutManager;
 
 fn select_display(index: usize) -> Option<DisplayInfo> {
-    /*let mut iter = screen::display_list().into_iter().enumerate();
-    return loop {
-        match iter.next() {
-            Some((i, display)) => {
-                if i == index {
-                    println!("i : {}", i);
-                    break Some(display);
-                }
-                continue;
-            }
-            None => {
-                break None;
-            }
-        }
-    };*/
-
     let mydisp = screenshots::DisplayInfo::all();
     match mydisp {
         Ok(disp) =>
@@ -55,22 +39,6 @@ fn select_display(index: usize) -> Option<DisplayInfo> {
 enum Action {
     Paint,
     None,
-}
-
-
-
-struct AppWindow {
-    name: String,
-    is_open: bool,
-}
-
-impl AppWindow {
-    fn new(name: String, is_open: bool) -> Self {
-        AppWindow {
-            name,
-            is_open,
-        }
-    }
 }
 
 struct RustShot {
@@ -138,7 +106,7 @@ impl RustShot {
                             self.action = Action::Paint;
                         }
                     }
-                    let combo_box = ComboBox::from_label("")
+                    ComboBox::from_label("")
                         .width(80.0)
                         .selected_text(format!("🕓 {:?} sec", self.timer.unwrap()))
                         .show_ui(ui, |ui| {
@@ -181,7 +149,7 @@ impl RustShot {
         });
     }
 
-    fn render_central_panel(&mut self, ctx: &Context, frame: &mut Frame) {
+    fn render_central_panel(&mut self, ctx: &Context, _frame: &mut Frame) {
         CentralPanel::default().show(ctx, |ui| match &self.curr_screenshot {
             //If screenshot is already available, then show it on the GUI
             Some(screenshot) => {
@@ -213,7 +181,7 @@ impl RustShot {
         });
     }
 
-    fn render_shape_window(&mut self, ctx:&Context, ui:&mut Ui) {
+    fn render_shape_window(&mut self, ctx:&Context, _ui:&mut Ui) {
         Window::new("Choose the shape").title_bar(false).
             show(ctx, |ui| {
                 ui.group( |ui| {

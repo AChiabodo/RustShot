@@ -1,8 +1,4 @@
-use std::io::ErrorKind::WouldBlock;
-use std::thread;
-use std::time::Duration;
-
-use screenshots::{DisplayInfo, Image, Screen};
+use screenshots::{DisplayInfo, Screen};
 
 use image::{DynamicImage, ImageBuffer};
 
