@@ -1,60 +1,68 @@
 use std::collections::HashMap;
 
-use eframe::egui::{KeyboardShortcut, Modifiers, Key, Ui, Window, Context, Button};
-use std::fmt::Write as _;
-use std::io::Write as _;
 use super::config_mod::KeyCommand;
-
+use eframe::egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window};
+use std::fmt::Write as _;
 
 pub struct ShortcutManager {
     shortcuts: HashMap<KeyCommand, KeyboardShortcut>,
-    show_window : bool,
-    waiting_for_input  : bool,
-    editing_command : KeyCommand,
-    input_changed : bool,
-    key_temp : Option<Key>,
-    shortcut_invalid : Option<KeyCommand>
+    show_window: bool,
+    waiting_for_input: bool,
+    editing_command: KeyCommand,
+    input_changed: bool,
+    key_temp: Option<Key>,
+    shortcut_invalid: Option<KeyCommand>,
 }
 
-impl Default for ShortcutManager{
+impl Default for ShortcutManager {
     fn default() -> Self {
         let mut map = HashMap::new();
-    map.insert(
-        KeyCommand::SaveScreenshot,
-        KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            key: Key::S,
-        },
-    );
-    map.insert(
-        KeyCommand::TakeScreenshot,
-        KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            key: Key::T,
-        },
-    );
-    map.insert(
-        KeyCommand::Edit,
-        KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            key: Key::E,
-        },
-    );
-    map.insert(
-        KeyCommand::Copy,
-        KeyboardShortcut {
-            modifiers: Modifiers::CTRL,
-            key: Key::C,
-        },
-    );
-    return Self {
-        shortcuts: map, show_window : false , waiting_for_input : false , editing_command : KeyCommand::None , input_changed : false , key_temp : None, shortcut_invalid : None
-    };
+        map.insert(
+            KeyCommand::SaveScreenshot,
+            KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                key: Key::S,
+            },
+        );
+        map.insert(
+            KeyCommand::TakeScreenshot,
+            KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                key: Key::T,
+            },
+        );
+        map.insert(
+            KeyCommand::Edit,
+            KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                key: Key::E,
+            },
+        );
+        map.insert(
+            KeyCommand::Copy,
+            KeyboardShortcut {
+                modifiers: Modifiers::CTRL,
+                key: Key::C,
+            },
+        );
+        return Self {
+            shortcuts: map,
+            show_window: false,
+            waiting_for_input: false,
+            editing_command: KeyCommand::None,
+            input_changed: false,
+            key_temp: None,
+            shortcut_invalid: None,
+        };
     }
 }
 
-fn check_valid_shortcut(shortcuts : &HashMap<KeyCommand, KeyboardShortcut>, test_key : Key , test_command : KeyCommand) -> Option<KeyCommand>{
-    for (command,shortcut) in shortcuts.iter() {
+fn check_valid_shortcut(
+    shortcuts: &HashMap<KeyCommand, KeyboardShortcut>,
+    test_key: Key,
+    test_command: KeyCommand,
+) -> Option<KeyCommand> {
+    for (command, shortcut) in shortcuts.iter() {
         if test_command != command.clone() && shortcut.key == test_key {
             return Some(command.clone());
         }
@@ -62,114 +70,116 @@ fn check_valid_shortcut(shortcuts : &HashMap<KeyCommand, KeyboardShortcut>, test
     return None;
 }
 
-impl ShortcutManager{
-    pub fn render_window(&mut self,ui : &mut Ui) {
-        Window::new("Shortcuts Editor".to_string()).open(&mut self.show_window).resize(|r| r.resizable(true)).show(ui.ctx(), |ui|
-            {    
+impl ShortcutManager {
+    pub fn render_window(&mut self, ui: &mut Ui) {
+        Window::new("Shortcuts Editor".to_string())
+            .open(&mut self.show_window)
+            .resize(|r| r.resizable(true))
+            .show(ui.ctx(), |ui| {
                 if self.waiting_for_input {
                     ui.label("Press the key you want to use as shortcut");
                     match self.key_temp {
                         Some(key) => {
                             let mut s = String::new();
-                            match write!(&mut s,"{:?}",key) {
+                            match write!(&mut s, "{:?}", key) {
                                 Ok(_) => {
                                     ui.label(s);
-                                },
+                                }
                                 Err(_) => {}
                             }
-                        },
+                        }
                         None => {}
-                }
-                ui.input(|i| {
-                   match i.keys_down.iter().next() {
-                          Some(k) => {
+                    }
+                    ui.input(|i| match i.keys_down.iter().next() {
+                        Some(k) => {
                             self.key_temp = Some(k.clone());
                             self.input_changed = true;
-                          },
-                          None => {}  
-                   } 
-                });
-                match &self.shortcut_invalid {
-                    Some(command) => {
-                        ui.add(eframe::egui::Separator::default());
-                        eframe::egui::Grid::new("Invalid Shortcut").show(ui, |ui|{
-                            ui.label("This shortcut is already in use for :");
-                            ui.label(command.to_string());
-                        
-                        });
-                        ui.add(eframe::egui::Separator::default());
+                        }
+                        None => {}
+                    });
+                    match &self.shortcut_invalid {
+                        Some(command) => {
+                            ui.add(eframe::egui::Separator::default());
+                            eframe::egui::Grid::new("Invalid Shortcut").show(ui, |ui| {
+                                ui.label("This shortcut is already in use for :");
+                                ui.label(command.to_string());
+                            });
+                            ui.add(eframe::egui::Separator::default());
+                        }
+                        None => {}
                     }
-                    None => {}
-                } 
-                ui.add(eframe::egui::Separator::default());   
-                eframe::egui::Grid::new(self.waiting_for_input).show(ui, |ui|{
-                    if ui.add(Button::new("Confirm")).clicked() {
-
-                        match check_valid_shortcut(&self.shortcuts,self.key_temp.unwrap().clone(), self.editing_command.clone()) {
-                            None => {
-                                if self.input_changed {
-                                    match self.shortcuts.get_mut(&self.editing_command) {
-                                    Some(s) => {
-                                        s.key = self.key_temp.unwrap();
-                                    },
-                                    None => {}
-                                }   
+                    ui.add(eframe::egui::Separator::default());
+                    eframe::egui::Grid::new(self.waiting_for_input).show(ui, |ui| {
+                        if ui.add(Button::new("Confirm")).clicked() {
+                            match check_valid_shortcut(
+                                &self.shortcuts,
+                                self.key_temp.unwrap().clone(),
+                                self.editing_command.clone(),
+                            ) {
+                                None => {
+                                    if self.input_changed {
+                                        match self.shortcuts.get_mut(&self.editing_command) {
+                                            Some(s) => {
+                                                s.key = self.key_temp.unwrap();
+                                            }
+                                            None => {}
+                                        }
+                                    }
+                                    self.waiting_for_input = false;
+                                    self.input_changed = false;
+                                    self.shortcut_invalid = None;
                                 }
-                                self.waiting_for_input = false;
-                                self.input_changed = false;
-                                self.shortcut_invalid = None;
-                            }
-                            Some(command) => {
-                                self.shortcut_invalid = Some(command);
+                                Some(command) => {
+                                    self.shortcut_invalid = Some(command);
+                                }
                             }
                         }
-                    }
-    
-                    
-                    if ui.add(Button::new("Cancel")).clicked() {
-                        self.waiting_for_input = false;
-                        self.input_changed = false;
-                        self.key_temp = None;
-                        self.shortcut_invalid = None;
-                    }
-                });
-                }     
-                else {
-                    for (command , shortcut) in self.shortcuts.iter() {
+
+                        if ui.add(Button::new("Cancel")).clicked() {
+                            self.waiting_for_input = false;
+                            self.input_changed = false;
+                            self.key_temp = None;
+                            self.shortcut_invalid = None;
+                        }
+                    });
+                } else {
+                    for (command, shortcut) in self.shortcuts.iter() {
                         //let visual : String = VirtualKey { key: shortcut.key.clone() }.to_string();
-                        eframe::egui::Grid::new(command).show(ui, |ui|{
-                            ui.label(format!("{} - CTRL + {}",command,VirtualKey { key: shortcut.key.clone() }.to_string()));  
+                        eframe::egui::Grid::new(command).show(ui, |ui| {
+                            ui.label(format!(
+                                "{} - CTRL + {}",
+                                command,
+                                VirtualKey {
+                                    key: shortcut.key.clone()
+                                }
+                                .to_string()
+                            ));
                             if ui.add(eframe::egui::Button::new("edit")).clicked() {
-                            self.waiting_for_input = true;
-                            self.editing_command = command.clone();
-                            self.key_temp = Some(shortcut.key.clone());
-                        }
+                                self.waiting_for_input = true;
+                                self.editing_command = command.clone();
+                                self.key_temp = Some(shortcut.key.clone());
+                            }
                         });
-                        ui.add(eframe::egui::Separator::default());   
+                        ui.add(eframe::egui::Separator::default());
                     }
-                }      
+                }
             });
     }
-
-    
 
     pub fn show_window(&mut self) {
         return self.show_window = true;
     }
 
-    pub fn check_shortcut(&mut self, ctx: &Context, command : &KeyCommand) -> bool {
-        ctx.input_mut(|i| {
-            i.consume_shortcut(&self.shortcuts.get(command).unwrap().clone())
-        })
+    pub fn check_shortcut(&mut self, ctx: &Context, command: &KeyCommand) -> bool {
+        ctx.input_mut(|i| i.consume_shortcut(&self.shortcuts.get(command).unwrap().clone()))
     }
-
 }
 
 struct VirtualKey {
     key: Key,
 }
 
-impl VirtualKey{
+impl VirtualKey {
     fn to_string(&self) -> String {
         match self.key {
             Key::A => "A".to_string(),
