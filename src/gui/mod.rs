@@ -97,8 +97,8 @@ impl RustShot {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 self.shortcuts.render_window(ui);
                 if self.action == Action::None {
-                    let screenshot_btn = ui.add(Button::new("New"));
-                    let screenshot_save_btn = self.icon_button("sd-card-fill", true, ctx, ui);
+                    let screenshot_btn = ui.add(Button::new("➕ New"));
+                    let screenshot_save_btn = ui.add(Button::new("💾 Save"));
                     //Spawn edit only if screenshot is available
                     if self.curr_screenshot.is_some() {
                         let paint_btn = ui.add(Button::new("Edit"));
@@ -131,7 +131,7 @@ impl RustShot {
                             None => {}
                         }
                     }
-                    let setting_btn = ui.add(Button::new("Settings"));
+                    let setting_btn = self.icon_button("gear", true, ctx, ui);
                     if setting_btn.clicked() {
                         self.shortcuts.show_window();
                     }
@@ -271,7 +271,7 @@ impl RustShot {
     fn display_selector(&mut self, ui: &mut Ui) {
         let mut selected = 0;
         ComboBox::from_id_source(0)
-            .selected_text(format!("Display {:?}", self.display.unwrap()))
+            .selected_text(format!("🖵 Display {:?}", self.display.unwrap()))
             .show_ui(ui, |ui| {
                 for (i, display) in screen::display_list().into_iter().enumerate() {
                     if ui
@@ -279,7 +279,7 @@ impl RustShot {
                             &mut self.display.clone().unwrap(),
                             i,
                             format!(
-                                "Display {} - {}x{} px",
+                                "🖵 Display {}  {}x{}",
                                 i,
                                 display.width,
                                 display.height,

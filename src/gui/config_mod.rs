@@ -131,13 +131,12 @@ pub fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<
         ),
     );
     tooltips_map.insert("clipboard".to_string(), "Copy image to clipboard".to_string());
-
-    tooltips_map.insert("sd-card-fill".to_string(), "Save ScreenShot".to_string());
+    tooltips_map.insert("gear".to_string(), "Setting".to_string());
     icons_map.insert(
-        "sd-card-fill".to_string(),
+        "gear".to_string(),
         RetainedImage::from_svg_bytes(
-            "sd-card-fill",
-            include_bytes!("../../resources/sd-card-fill.svg"),
+            "gear",
+            include_bytes!("../../resources/gear.svg"),
         ),
     );
     return (icons_map, tooltips_map);
