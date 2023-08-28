@@ -102,7 +102,7 @@ impl RustShot {
                     //Spawn edit only if screenshot is available
                     if self.curr_screenshot.is_some() {
                         let paint_btn = ui.add(Button::new("Edit"));
-                        if paint_btn.clicked() || self.shortcuts.check_shortcut(ctx, &KeyCommand::Edit)
+                        if paint_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::Edit)
                         {
                             self.action = Action::Paint;
                         }
@@ -117,12 +117,12 @@ impl RustShot {
                             ui.selectable_value(&mut self.timer, Some(10), "🕓 10 sec");
                         });
                     self.display_selector(ui);
-                    if screenshot_btn.clicked() || self.shortcuts.check_shortcut(ctx, &KeyCommand::TakeScreenshot)
+                    if screenshot_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::TakeScreenshot)
                     {
                         self.store_screenshot(frame, ctx);
                     }
 
-                    if screenshot_save_btn.clicked() || self.shortcuts.check_shortcut(ctx, &KeyCommand::SaveScreenshot)
+                    if screenshot_save_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::SaveScreenshot)
                     {
                         match &self.curr_screenshot {
                             Some(screenshot) => {
@@ -138,7 +138,7 @@ impl RustShot {
                     //Spawn clipboard only if screenshot is already available
                     if self.curr_screenshot.is_some() {
                         let copy_btn = self.icon_button("clipboard", true, ctx, ui);
-                        if copy_btn.clicked() || self.shortcuts.check_shortcut(ctx, &KeyCommand::Copy) {
+                        if copy_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::Copy) {
                             self.copy_image();
                         }
                     }
@@ -383,7 +383,7 @@ impl RustShot {
             if rmv_tool_btn.clicked() {
                 self.paint_info.curr_tool = Tool::None;
             }
-            if save_paint_btn.clicked() {
+            if save_paint_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::Edit) {
                 self.action = Action::None;
                 self.save_paint_changes();
             }
