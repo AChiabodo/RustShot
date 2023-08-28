@@ -1,7 +1,10 @@
 use std::{collections::HashMap, fmt::Display};
 
 use super::config_mod::KeyCommand;
-use eframe::{egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window}, epaint::{Stroke, Color32}};
+use eframe::{
+    egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window},
+    epaint::{Color32, Stroke},
+};
 use std::fmt::Write as _;
 
 pub struct ShortcutManager {
@@ -143,44 +146,22 @@ impl ShortcutManager {
                         }
                     });
                 } else {
-                    
                     for (command, shortcut) in self.shortcuts.iter() {
-
                         ui.columns(3, |columns| {
-                            columns[0].label(format!("{}",command));
-                            columns[1].label(format!("CTRL + {}",VirtualKey::from_key(shortcut.key.clone())));
-                            if columns[2].add(eframe::egui::Button::new("Edit")).clicked() {
-                                self.waiting_for_input = true;
-                                self.editing_command = command.clone();
-                                self.key_temp = Some(shortcut.key.clone());
-                            }
-                            
-                        });
-                        ui.add(eframe::egui::Separator::default());
-/*
-                        eframe::egui::Grid::new(command).show(ui, |ui| {
-                            
-                            ui.with_layout(eframe::egui::Layout::left_to_right(eframe::egui::Align::Center), |ui| {
-                            eframe::egui::Grid::new(shortcut).show(ui, |ui| {
-                                
-                                ui.label(format!("{}",command));
-                                ui.label(format!("CTRL + {}",VirtualKey::from_key(shortcut.key.clone())));
-                                //ui.label(format!("{}",VirtualKey::from_key(shortcut.key.clone())));
-                                
+                            columns[0].label(format!("{}", command));
+                            columns[1].label(format!(
+                                "CTRL + {}",
+                                VirtualKey::from_key(shortcut.key.clone())
+                            ));
+                            columns[2].vertical_centered(|ui| {
+                                if ui.add(eframe::egui::Button::new("Edit")).clicked() {
+                                    self.waiting_for_input = true;
+                                    self.editing_command = command.clone();
+                                    self.key_temp = Some(shortcut.key.clone());
+                                }
                             });
-                            
-                            
-                            if ui.add(eframe::egui::Button::new("edit")).clicked() {
-                                self.waiting_for_input = true;
-                                self.editing_command = command.clone();
-                                self.key_temp = Some(shortcut.key.clone());
-                            }
-                             
-                        });
-                        
                         });
                         ui.add(eframe::egui::Separator::default());
-*/
                     }
                 }
             });
@@ -190,8 +171,16 @@ impl ShortcutManager {
         return self.show_window = true;
     }
 
-    pub fn check_shortcut(&mut self, ctx: &Context, command: &KeyCommand) -> bool {
-        ctx.input_mut(|i| i.consume_shortcut(&self.shortcuts.get(command).unwrap().clone()))
+    /// Use the shortcut linked to the KeyCommand passed to the function
+    /// Return true if the shortcut is detected and false otherwise (or if the shortcut does not exist)
+    pub fn use_shortcut(&mut self, ctx: &Context, command: &KeyCommand) -> bool {
+
+        match self.shortcuts.get(command) {
+            Some(shortcut) => {
+                ctx.input_mut(|i| i.consume_shortcut(shortcut))
+            },
+            None => false,
+        }        
     }
 }
 
@@ -201,13 +190,13 @@ struct VirtualKey {
 
 impl Display for VirtualKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f,"{}",self.to_string())
+        write!(f, "{}", self.to_string())
     }
 }
 
 impl VirtualKey {
-    fn from_key(key : Key) -> Self {
-        return Self {key : key};
+    fn from_key(key: Key) -> Self {
+        return Self { key: key };
     }
     fn to_string(&self) -> String {
         match self.key {
