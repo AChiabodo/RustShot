@@ -92,12 +92,13 @@ impl RustShot {
     }
 
     fn render_top_panel(&mut self, ctx: &Context, frame: &mut Frame) {
+        
         TopBottomPanel::top("top panel").show(ctx, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 self.shortcuts.render_window(ui);
                 if self.action == Action::None {
-                    let screenshot_btn = ui.add(Button::new("Take Screenshot"));
-                    let screenshot_save_btn = ui.add(Button::new("Save Screenshot"));
+                    let screenshot_btn = ui.add(Button::new("New"));
+                    let screenshot_save_btn = self.icon_button("sd-card-fill", true, ctx, ui);
                     //Spawn edit only if screenshot is available
                     if self.curr_screenshot.is_some() {
                         let paint_btn = ui.add(Button::new("Edit"));
@@ -327,6 +328,8 @@ impl RustShot {
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             let save_paint_btn = ui.add(Button::new("Save changes"));
+            //let save_paint_btn = ui.add_sized([100.0, 100.0],Button::new("Save changes"));
+
             if self.curr_screenshot.as_ref().unwrap().get_images_len() > 1 {
                 let undo_btn = self.icon_button("arrow-90deg-left", true, ctx, ui);
                 if undo_btn.clicked() {
@@ -490,7 +493,6 @@ fn save_screenshot(screenshot: &DynamicImage) {
         //tinyfiledialogs::save_file_dialog("Select save location", "./screen.jpg");
         FileDialog::new().add_filter("PNG", &["png"])
             .add_filter("JPG", &["jpg"]).add_filter("GIF", &["gif"])
-            .add_filter("WEBP", &["WEBP"]) //ToDelete?
             .add_filter("BMP", &["Bmp"])
             .set_directory("./")
             .save_file();
