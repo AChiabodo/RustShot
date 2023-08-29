@@ -98,9 +98,18 @@ impl RustShot {
                 self.shortcuts.render_window(ui);
                 if self.action == Action::None {
                     let screenshot_btn = ui.add(Button::new("➕ New"));
-                    let screenshot_save_btn = ui.add(Button::new("💾 Save"));
-                    //Spawn edit only if screenshot is available
+                    //Spawn edit and save only if screenshot is available
                     if self.curr_screenshot.is_some() {
+                        let screenshot_save_btn = ui.add(Button::new("💾 Save"));
+                        if screenshot_save_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::SaveScreenshot)
+                        {
+                            match &self.curr_screenshot {
+                                Some(screenshot) => {
+                                    save_screenshot(&screenshot.get_final_image().get_image());
+                                }
+                                None => {}
+                            }
+                        }
                         let paint_btn = ui.add(Button::new("Edit"));
                         if paint_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::Edit)
                         {
@@ -122,15 +131,6 @@ impl RustShot {
                         self.store_screenshot(frame, ctx);
                     }
 
-                    if screenshot_save_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::SaveScreenshot)
-                    {
-                        match &self.curr_screenshot {
-                            Some(screenshot) => {
-                                save_screenshot(&screenshot.get_final_image().get_image());
-                            }
-                            None => {}
-                        }
-                    }
                     let setting_btn = self.icon_button("gear", true, ctx, ui);
                     if setting_btn.clicked() {
                         self.shortcuts.show_window();
@@ -172,7 +172,7 @@ impl RustShot {
                             .sense(Sense::click_and_drag()),
                     );
                     if self.action == Action::Paint {
-                        self.paint_logic(ctx, img);
+                        self.paint_logic(ctx, img, ui);
                     }
                 });
             }
@@ -406,7 +406,7 @@ impl RustShot {
     }
 
     /// Logic for painting on the image
-    fn paint_logic(&mut self, ctx: &Context, img: Response) {
+    fn paint_logic(&mut self, ctx: &Context, img: Response, ui: &mut Ui) {
         let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
         if img.dragged() {
             if !self.paint_info.painting {
@@ -431,11 +431,12 @@ impl RustShot {
                 Tool::Highlighter => curr_screenshot.get_last_image().get_image(),
                 _ => curr_screenshot.get_last_image().get_image(),
             };
+
             self.paint_info.apply_tool(&mut screen_to_paint, tmp);
             if self.paint_info.curr_tool == Tool::Drawing || self.paint_info.curr_tool == Tool::Highlighter || self.paint_info.curr_tool == Tool::Eraser {
                 self.paint_info.last_ptr = self.paint_info.curr_ptr;
             }
-            curr_screenshot.set_tmp_image(screen_to_paint.clone());
+            curr_screenshot.set_tmp_image(screen_to_paint);
         } else if img.drag_released() {
             if self.paint_info.curr_tool == Tool::Crop {
                 self.paint_info.curr_ptr =
