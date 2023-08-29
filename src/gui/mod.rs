@@ -426,13 +426,13 @@ impl RustShot {
                 if self.paint_info.curr_ptr.x >= rect.right() - 20. {
                     ui.scroll_with_delta(Vec2::new(rect.right() - 20. - self.paint_info.curr_ptr.x, 0.));
                 }
-                else if self.paint_info.curr_ptr.x <= rect.left() + 20. {
+                if self.paint_info.curr_ptr.x <= rect.left() + 20. {
                     ui.scroll_with_delta(Vec2::new(rect.left() + 20. - self.paint_info.curr_ptr.x, 0.));
                 }
-                else if self.paint_info.curr_ptr.y <= rect.top() + 20. {
+                if self.paint_info.curr_ptr.y <= rect.top() + 20. {
                     ui.scroll_with_delta(Vec2::new(0., rect.top() + 20. - self.paint_info.curr_ptr.y));
                 }
-                else if self.paint_info.curr_ptr.y >= rect.bottom() - 20. {
+                if self.paint_info.curr_ptr.y >= rect.bottom() - 20. {
                     ui.scroll_with_delta(Vec2::new(0., rect.bottom() - 20. - self.paint_info.curr_ptr.y));
                 }
                 // To make scrolling while cropping more fluid, i need to keep requesting to repaint
