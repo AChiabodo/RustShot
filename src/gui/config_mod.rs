@@ -1,7 +1,8 @@
 use std::{collections::HashMap, fmt::Display};
 use egui_extras::RetainedImage;
+use serde::{Serialize,Deserialize};
 
-#[derive(Debug,PartialEq, Eq, PartialOrd, Ord, Hash,Clone)]
+#[derive(Debug,PartialEq, Eq, PartialOrd, Ord, Hash,Clone,Serialize, Deserialize)]
 pub enum KeyCommand {
     SaveScreenshot,
     TakeScreenshot,

@@ -84,7 +84,7 @@ impl RustShot {
             timer: Some(0),
             allowed_to_close: true,
             show_confirmation_dialog: false,
-            shortcuts: ShortcutManager::default(),
+            shortcuts: ShortcutManager::new(),
             icons: icons_map,
             tooltips: tooltips_map,
             shape_window_open : false,
