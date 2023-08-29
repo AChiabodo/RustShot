@@ -435,7 +435,7 @@ impl RustShot {
             if self.paint_info.curr_tool == Tool::Drawing || self.paint_info.curr_tool == Tool::Highlighter || self.paint_info.curr_tool == Tool::Eraser {
                 self.paint_info.last_ptr = self.paint_info.curr_ptr;
             }
-            curr_screenshot.set_tmp_image(screen_to_paint.clone());
+            curr_screenshot.set_tmp_image(screen_to_paint);
         } else if img.drag_released() {
             if self.paint_info.curr_tool == Tool::Crop {
                 self.paint_info.curr_ptr =
