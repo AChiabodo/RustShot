@@ -1,14 +1,26 @@
-use std::{collections::HashMap, fmt::Display};
-
 use super::config_mod::KeyCommand;
-use eframe::{
-    egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window},
-    epaint::{Color32, Stroke},
-};
+use eframe::egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window};
+use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
+use std::io::{Write, BufWriter};
+use std::{collections::HashMap, fmt::Display, fs};
 
+fn check_valid_shortcut(
+    shortcuts: &HashMap<KeyCommand, VirtualShortcut>,
+    test_key: Key,
+    test_command: KeyCommand,
+) -> Option<KeyCommand> {
+    for (command, shortcut) in shortcuts.iter() {
+        if test_command != command.clone() && shortcut.key == test_key {
+            return Some(command.clone());
+        }
+    }
+    return None;
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct ShortcutManager {
-    shortcuts: HashMap<KeyCommand, KeyboardShortcut>,
+    shortcuts: HashMap<KeyCommand, VirtualShortcut>,
     show_window: bool,
     waiting_for_input: bool,
     editing_command: KeyCommand,
@@ -22,31 +34,19 @@ impl Default for ShortcutManager {
         let mut map = HashMap::new();
         map.insert(
             KeyCommand::SaveScreenshot,
-            KeyboardShortcut {
-                modifiers: Modifiers::CTRL,
-                key: Key::S,
-            },
+            VirtualShortcut::new(Modifiers::CTRL, Key::S),
         );
         map.insert(
             KeyCommand::TakeScreenshot,
-            KeyboardShortcut {
-                modifiers: Modifiers::CTRL,
-                key: Key::T,
-            },
+            VirtualShortcut::new(Modifiers::CTRL, Key::T),
         );
         map.insert(
             KeyCommand::Edit,
-            KeyboardShortcut {
-                modifiers: Modifiers::CTRL,
-                key: Key::E,
-            },
+            VirtualShortcut::new(Modifiers::CTRL, Key::E),
         );
         map.insert(
             KeyCommand::Copy,
-            KeyboardShortcut {
-                modifiers: Modifiers::CTRL,
-                key: Key::C,
-            },
+            VirtualShortcut::new(Modifiers::CTRL, Key::C),
         );
         return Self {
             shortcuts: map,
@@ -60,20 +60,36 @@ impl Default for ShortcutManager {
     }
 }
 
-fn check_valid_shortcut(
-    shortcuts: &HashMap<KeyCommand, KeyboardShortcut>,
-    test_key: Key,
-    test_command: KeyCommand,
-) -> Option<KeyCommand> {
-    for (command, shortcut) in shortcuts.iter() {
-        if test_command != command.clone() && shortcut.key == test_key {
-            return Some(command.clone());
-        }
-    }
-    return None;
+fn write_to_disk(temp: &ShortcutManager) -> anyhow::Result<()> {
+    let file = std::fs::File::open(".shortcuts".to_string())?;
+    let file = std::io::BufWriter::new(file);
+    serde_json::to_writer(file, temp)?;
+    Ok(())
+}
+fn read_from_disk() -> anyhow::Result<ShortcutManager> {
+    let file = std::fs::File::open(".shortcuts".to_string())?;
+        let file = std::io::BufReader::new(file);
+        let res : ShortcutManager = serde_json::from_reader(file)?;
+        Ok(res)
 }
 
 impl ShortcutManager {
+    
+    pub fn new() -> Self {
+        let file_path = ".shortcuts";
+        match fs::metadata(file_path) {
+            Ok(_) => {
+                match read_from_disk() {
+                    Ok(res) => {return res;},
+                    Err(_) => {return ShortcutManager::default();}
+                } ;
+            }
+            Err(_) => {
+                return ShortcutManager::default();
+            }
+        }
+    }
+
     pub fn render_window(&mut self, ui: &mut Ui) {
         Window::new("Shortcuts Editor".to_string())
             .open(&mut self.show_window)
@@ -163,6 +179,9 @@ impl ShortcutManager {
                         });
                         ui.add(eframe::egui::Separator::default());
                     }
+                    if ui.add(Button::new("Save to disk")).clicked() {
+                        //write_to_disk(self); //needs to change the function
+                    }
                 }
             });
     }
@@ -174,26 +193,60 @@ impl ShortcutManager {
     /// Use the shortcut linked to the KeyCommand passed to the function
     /// Return true if the shortcut is detected and false otherwise (or if the shortcut does not exist)
     pub fn use_shortcut(&mut self, ctx: &Context, command: &KeyCommand) -> bool {
-
         match self.shortcuts.get(command) {
-            Some(shortcut) => {
-                ctx.input_mut(|i| i.consume_shortcut(shortcut))
-            },
+            Some(shortcut) => ctx.input_mut(|i| i.consume_shortcut(&shortcut.clone().into())),
             None => false,
-        }        
+        }
     }
 }
 
 struct VirtualKey {
     key: Key,
 }
+#[derive(Serialize, Deserialize, Debug)]
+struct VirtualShortcut {
+    key: Key,
+    modifier: Modifiers,
+}
 
+impl Into<KeyboardShortcut> for VirtualShortcut {
+    fn into(self) -> KeyboardShortcut {
+        KeyboardShortcut {
+            modifiers: self.modifier,
+            key: self.key,
+        }
+    }
+}
+impl Into<KeyboardShortcut> for &VirtualShortcut {
+    fn into(self) -> KeyboardShortcut {
+        KeyboardShortcut {
+            modifiers: self.modifier,
+            key: self.key,
+        }
+    }
+}
+impl From<KeyboardShortcut> for VirtualShortcut {
+    fn from(value: KeyboardShortcut) -> Self {
+        Self {
+            key: value.key,
+            modifier: value.modifiers,
+        }
+    }
+}
+
+impl VirtualShortcut {
+    fn new(modifier: Modifiers, key: Key) -> Self {
+        Self {
+            key: key,
+            modifier: modifier,
+        }
+    }
+}
 impl Display for VirtualKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
-
 impl VirtualKey {
     fn from_key(key: Key) -> Self {
         return Self { key: key };
