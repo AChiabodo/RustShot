@@ -98,9 +98,18 @@ impl RustShot {
                 self.shortcuts.render_window(ui);
                 if self.action == Action::None {
                     let screenshot_btn = ui.add(Button::new("➕ New"));
-                    let screenshot_save_btn = ui.add(Button::new("💾 Save"));
-                    //Spawn edit only if screenshot is available
+                    //Spawn edit and save only if screenshot is available
                     if self.curr_screenshot.is_some() {
+                        let screenshot_save_btn = ui.add(Button::new("💾 Save"));
+                        if screenshot_save_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::SaveScreenshot)
+                        {
+                            match &self.curr_screenshot {
+                                Some(screenshot) => {
+                                    save_screenshot(&screenshot.get_final_image().get_image());
+                                }
+                                None => {}
+                            }
+                        }
                         let paint_btn = ui.add(Button::new("Edit"));
                         if paint_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::Edit)
                         {
@@ -122,15 +131,6 @@ impl RustShot {
                         self.store_screenshot(frame, ctx);
                     }
 
-                    if screenshot_save_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::SaveScreenshot)
-                    {
-                        match &self.curr_screenshot {
-                            Some(screenshot) => {
-                                save_screenshot(&screenshot.get_final_image().get_image());
-                            }
-                            None => {}
-                        }
-                    }
                     let setting_btn = self.icon_button("gear", true, ctx, ui);
                     if setting_btn.clicked() {
                         self.shortcuts.show_window();
