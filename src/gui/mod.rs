@@ -22,6 +22,8 @@ use std::collections::HashMap;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
+use eframe::emath::Rect;
+use egui::Vec2;
 
 use self::shortcuts::ShortcutManager;
 
@@ -158,7 +160,7 @@ impl RustShot {
                     Action::None => screenshot.get_final_image().get_image(),
                     Action::Paint => screenshot.get_tmp_image().get_image(),
                 };
-                ScrollArea::both().show(ui, |ui| {
+                ScrollArea::both().show_viewport(ui, |ui, rect| {
                     let retained_img = RetainedImage::from_color_image(
                         "screenshot",
                         ColorImage::from_rgba_unmultiplied(
@@ -172,7 +174,7 @@ impl RustShot {
                             .sense(Sense::click_and_drag()),
                     );
                     if self.action == Action::Paint {
-                        self.paint_logic(ctx, img, ui);
+                        self.paint_logic(img, ui, rect);
                     }
                 });
             }
@@ -406,7 +408,7 @@ impl RustShot {
     }
 
     /// Logic for painting on the image
-    fn paint_logic(&mut self, ctx: &Context, img: Response, ui: &mut Ui) {
+    fn paint_logic(&mut self, img: Response, ui: &mut Ui, rect: Rect) {
         let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
         if img.dragged() {
             if !self.paint_info.painting {
@@ -416,8 +418,26 @@ impl RustShot {
             }
             self.paint_info.curr_ptr = match img.hover_pos() {
                 Some(pos) => into_relative_pos(pos, img.rect),
-                None => self.paint_info.last_ptr,
+                None => self.paint_info.curr_ptr,
             };
+
+            if self.paint_info.curr_tool == Tool::Crop {
+                if self.paint_info.curr_ptr.x >= rect.right() - 20. {
+                    ui.scroll_with_delta(Vec2::new(rect.right() - 20. - self.paint_info.curr_ptr.x, 0.));
+                }
+                else if self.paint_info.curr_ptr.x <= rect.left() + 20. {
+                    ui.scroll_with_delta(Vec2::new(rect.left() + 20. - self.paint_info.curr_ptr.x, 0.));
+                }
+                else if self.paint_info.curr_ptr.y <= rect.top() + 20. {
+                    ui.scroll_with_delta(Vec2::new(0., rect.top() + 20. - self.paint_info.curr_ptr.y));
+                }
+                else if self.paint_info.curr_ptr.y >= rect.bottom() - 20. {
+                    ui.scroll_with_delta(Vec2::new(0., rect.bottom() - 20. - self.paint_info.curr_ptr.y));
+                }
+                // To make scrolling while cropping more fluid, i need to keep requesting to repaint
+                ui.ctx().request_repaint();
+            }
+
             let mut screen_to_paint = curr_screenshot.get_last_image();
             match self.paint_info.curr_tool {
                 Tool::Drawing => screen_to_paint = curr_screenshot.get_tmp_image(),
@@ -437,6 +457,7 @@ impl RustShot {
                 self.paint_info.last_ptr = self.paint_info.curr_ptr;
             }
             curr_screenshot.set_tmp_image(screen_to_paint);
+
         } else if img.drag_released() {
             if self.paint_info.curr_tool == Tool::Crop {
                 self.paint_info.curr_ptr =
@@ -474,7 +495,8 @@ impl RustShot {
                 curr_screenshot.stack_image(img.clone());
                 curr_screenshot.set_tmp_image(img);
                 curr_screenshot.push_crop_image(crop_image);
-            } else {
+            }
+            else {
                 curr_screenshot.stack_image(curr_screenshot.get_tmp_image());
             }
             self.paint_info.soft_reset();
