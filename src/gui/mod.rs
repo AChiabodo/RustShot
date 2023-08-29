@@ -421,6 +421,7 @@ impl RustShot {
                 None => self.paint_info.curr_ptr,
             };
 
+            // Automatic scrolling when using crop tool
             if self.paint_info.curr_tool == Tool::Crop {
                 if self.paint_info.curr_ptr.x >= rect.right() - 20. {
                     ui.scroll_with_delta(Vec2::new(rect.right() - 20. - self.paint_info.curr_ptr.x, 0.));
