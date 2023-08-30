@@ -27,6 +27,7 @@ pub struct ShortcutManager {
     input_changed: bool,
     key_temp: Option<Key>,
     shortcut_invalid: Option<KeyCommand>,
+    
 }
 
 impl Default for ShortcutManager {
@@ -181,6 +182,7 @@ impl ShortcutManager {
                     }
                     if ui.add(Button::new("Save to disk")).clicked() {
                         //write_to_disk(self); //needs to change the function
+                        
                     }
                 }
             });
