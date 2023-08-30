@@ -2,6 +2,21 @@ use eframe::egui::{Pos2, Vec2, Rect};
 use image::{DynamicImage, GenericImageView, Pixel};
 use imageproc::drawing;
 use imageproc::drawing::{BresenhamLineIter, Canvas, draw_filled_circle_mut};
+use rusttype::{point, Font, Scale};
+
+/// Measure width and length of a given text using a given font and scale
+pub fn measure_line(font: &Font, text: &str, scale: Scale) -> (f32, f32) {
+    let width = font
+        .layout(text, scale, point(0.0, 0.0))
+        .map(|g| g.position().x + g.unpositioned().h_metrics().advance_width)
+        .last()
+        .unwrap_or(0.0);
+
+    let v_metrics = font.v_metrics(scale);
+    let height = v_metrics.ascent - v_metrics.descent + v_metrics.line_gap;
+
+    (width, height)
+}
 
 pub fn draw_arrow (img: &mut DynamicImage, start:(f32, f32), end:(f32, f32), t: usize, color: [u8; 4]) {
     draw_thick_line(img, start, end, t, color);
