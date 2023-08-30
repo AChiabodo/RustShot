@@ -1,9 +1,11 @@
 use super::config_mod::KeyCommand;
-use eframe::egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window};
+use eframe::egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window, ComboBox};
 use serde::{Deserialize, Serialize};
-use std::fmt::Write as _;
+use std::fmt::{Write as _, format};
 use std::io::{Write, BufWriter};
+use std::path::PathBuf;
 use std::{collections::HashMap, fmt::Display, fs};
+use rfd::FileDialog;
 
 fn check_valid_shortcut(
     shortcuts: &HashMap<KeyCommand, VirtualShortcut>,
@@ -27,6 +29,8 @@ pub struct ShortcutManager {
     input_changed: bool,
     key_temp: Option<Key>,
     shortcut_invalid: Option<KeyCommand>,
+    pub default_path: Option<PathBuf>,
+    pub extension : String
 }
 
 impl Default for ShortcutManager {
@@ -56,6 +60,8 @@ impl Default for ShortcutManager {
             input_changed: false,
             key_temp: None,
             shortcut_invalid: None,
+            default_path: Some(PathBuf::from("./")),
+            extension : ".png".to_string(),
         };
     }
 }
@@ -66,6 +72,8 @@ fn write_to_disk(temp: &ShortcutManager) -> anyhow::Result<()> {
     serde_json::to_writer(file, temp)?;
     Ok(())
 }
+
+
 fn read_from_disk() -> anyhow::Result<ShortcutManager> {
     let file = std::fs::File::open(".shortcuts".to_string())?;
         let file = std::io::BufReader::new(file);
@@ -179,8 +187,43 @@ impl ShortcutManager {
                         });
                         ui.add(eframe::egui::Separator::default());
                     }
+
+
+                    ui.columns(2, |columns|{
+                        
+                        columns[0].label(format!("{}",self.default_path.as_ref().unwrap().clone().as_path().display().to_string()));
+                        columns[1].vertical_centered(|ui| {
+                    if ui.add(Button::new("Change default Path")).clicked() {
+
+                        match FileDialog::new().pick_folder() 
+                        {
+                            Some(path) => {  
+                                self.default_path= Some(path)
+                            }, 
+                            None => {}, 
+                        }
+                    }});       
+                    });
+                    ui.add(eframe::egui::Separator::default());
+                    ui.columns(2, |columns|{
+                        columns[0].label(format!("Extension"));
+                        columns[1].vertical_centered(|ui| {
+                    ComboBox::from_id_source(2)
+                            .width(50.0)
+                            .selected_text(format!("{}", self.extension.as_str()[1..self.extension.len()].to_string().to_ascii_uppercase()))
+                            .show_ui(ui, |ui| {
+                                ui.selectable_value(&mut self.extension, ".png".to_string(), "PNG");
+                                ui.selectable_value(&mut self.extension, ".jpg".to_string(), "JPG");
+                                ui.selectable_value(&mut self.extension, ".gif".to_string(), "GIF");
+                                ui.selectable_value(&mut self.extension, ".bmp".to_string(), "BMP");
+                            });      
+                    });
+                });
+                    
+                ui.add(eframe::egui::Separator::default());
                     if ui.add(Button::new("Save to disk")).clicked() {
                         //write_to_disk(self); //needs to change the function
+                        
                     }
                 }
             });
