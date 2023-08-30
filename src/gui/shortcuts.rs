@@ -189,10 +189,10 @@ impl ShortcutManager {
                     }
 
 
-                    ui.columns(3, |columns|{
-                        columns[0].label(format!("Save"));
-                        columns[1].label(format!("{}",self.default_path.as_ref().unwrap().clone().as_path().display().to_string()));
-                        columns[2].vertical_centered(|ui| {
+                    ui.columns(2, |columns|{
+                        
+                        columns[0].label(format!("{}",self.default_path.as_ref().unwrap().clone().as_path().display().to_string()));
+                        columns[1].vertical_centered(|ui| {
                     if ui.add(Button::new("Change default Path")).clicked() {
 
                         match FileDialog::new().pick_folder() 
@@ -205,12 +205,12 @@ impl ShortcutManager {
                     }});       
                     });
                     ui.add(eframe::egui::Separator::default());
-                    ui.columns(3, |columns|{
+                    ui.columns(2, |columns|{
                         columns[0].label(format!("Extension"));
                         columns[1].vertical_centered(|ui| {
                     ComboBox::from_id_source(2)
                             .width(50.0)
-                            .selected_text(format!("{}", self.extension))
+                            .selected_text(format!("{}", self.extension.as_str()[1..self.extension.len()].to_string().to_ascii_uppercase()))
                             .show_ui(ui, |ui| {
                                 ui.selectable_value(&mut self.extension, ".png".to_string(), "PNG");
                                 ui.selectable_value(&mut self.extension, ".jpg".to_string(), "JPG");
