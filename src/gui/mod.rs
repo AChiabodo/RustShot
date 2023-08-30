@@ -10,6 +10,7 @@ use crate::gui::config_mod::*;
 
 use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, CursorIcon, ImageButton, Label, Layout, Pos2, Response, ScrollArea, Sense, Slider, TopBottomPanel, Ui, Window};
 use arboard::Clipboard;
+use eframe::epaint::tessellator::Path;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
@@ -22,6 +23,7 @@ use screenshots::DisplayInfo;
 use std::borrow::Cow;
 use std::cmp::max;
 use std::collections::HashMap;
+use std::path::PathBuf;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
@@ -60,6 +62,7 @@ struct RustShot {
     icons: HashMap<String, Result<RetainedImage, String>>,
     tooltips: HashMap<String, String>,
     shape_window_open: bool,
+    screen_counter : u128, 
 }
 
 
@@ -93,6 +96,7 @@ impl RustShot {
             icons: icons_map,
             tooltips: tooltips_map,
             shape_window_open : false,
+            screen_counter : 0 , 
         }
     }
 
@@ -105,12 +109,23 @@ impl RustShot {
                     let screenshot_btn = ui.add(Button::new("➕ New"));
                     //Spawn edit and save only if screenshot is available
                     if self.curr_screenshot.is_some() {
-                        let screenshot_save_btn = ui.add(Button::new("💾 Save"));
+                        let screenshot_save_btn = ui.add(Button::new("💾 Save with name"));
                         if screenshot_save_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::SaveScreenshot)
                         {
                             match &self.curr_screenshot {
                                 Some(screenshot) => {
-                                    save_screenshot(&screenshot.get_final_image().get_image());
+                                    self.save_screenshot(&screenshot.get_final_image().get_image());
+                                }
+                                None => {}
+                            }
+                        }
+
+                        let screenshot_save_default_btn = ui.add(Button::new("💾 Save"));
+                        if screenshot_save_default_btn.clicked() // || self.shortcuts.use_shortcut(ctx, &KeyCommand::QuickSaveScreenshot)
+                        {
+                            match &self.curr_screenshot {
+                                Some(screenshot) => {
+                                    self.save_default_screenshot(&screenshot.get_final_image().get_image());
                                 }
                                 None => {}
                             }
@@ -513,32 +528,54 @@ impl RustShot {
             }
         }
     }
+
+    fn save_screenshot(&mut self,screenshot: &DynamicImage) {
+        let path =
+            //tinyfiledialogs::save_file_dialog("Select save location", "./screen.jpg");
+            FileDialog::new().add_filter("PNG", &["png"])
+                .add_filter("JPG", &["jpg"]).add_filter("GIF", &["gif"])
+                .add_filter("BMP", &["bmp"])
+                .set_directory("./")
+                .save_file();
+        match path {
+            Some(path) => {
+                match image::save_buffer(
+                    path,
+                    &screenshot.as_bytes(),
+                    screenshot.width() as u32,
+                    screenshot.height() as u32,
+                    image::ColorType::Rgba8,
+                ) {
+                    Ok(_) => println!("Screenshot saved"),
+                    Err(err) => println!("{}", err),
+                }
+            }
+            None => {}
+        }
+    }
+    
+    
+    fn save_default_screenshot(&mut self,screenshot: &DynamicImage) {
+        let mut path = String::from(self.shortcuts.default_path.clone().unwrap().into_os_string().to_str().unwrap());
+        path.push_str("/screen");
+        path = path + self.screen_counter.to_string().clone().as_str() + self.shortcuts.extension.clone().as_str();
+        self.screen_counter+=1;
+        match image::save_buffer(
+            //self.default_path.unwrap()
+            path,
+            &screenshot.as_bytes(),
+            screenshot.width() as u32,
+            screenshot.height() as u32,
+            image::ColorType::Rgba8,
+        ) {
+            Ok(_) => println!("Screenshot saved"),
+            Err(err) => println!("{}", err),
+        }
+    }
+    
 }
 
-fn save_screenshot(screenshot: &DynamicImage) {
-    let path =
-        //tinyfiledialogs::save_file_dialog("Select save location", "./screen.jpg");
-        FileDialog::new().add_filter("PNG", &["png"])
-            .add_filter("JPG", &["jpg"]).add_filter("GIF", &["gif"])
-            .add_filter("BMP", &["Bmp"])
-            .set_directory("./")
-            .save_file();
-    match path {
-        Some(path) => {
-            match image::save_buffer(
-                path,
-                &screenshot.as_bytes(),
-                screenshot.width() as u32,
-                screenshot.height() as u32,
-                image::ColorType::Rgba8,
-            ) {
-                Ok(_) => println!("Screenshot saved"),
-                Err(err) => println!("{}", err),
-            }
-        }
-        None => {}
-    }
-}
+
 
 impl App for RustShot {
     fn update(&mut self, ctx: &Context, frame: &mut Frame) {
