@@ -288,25 +288,10 @@ impl RustShot {
         ComboBox::from_id_source(0)
             .selected_text(format!("🖵 Display {:?}", self.display.unwrap()))
             .show_ui(ui, |ui| {
-                for (i, display) in screen::display_list().into_iter().enumerate() {
-                    if ui
-                        .selectable_value(
-                            &mut self.display.clone().unwrap(),
-                            i,
-                            format!(
-                                "🖵 Display {}  {}x{}",
-                                i,
-                                display.width,
-                                display.height,
-                            ),
-                        )
-                        .clicked()
-                    {
-                        selected = i;
-                        println!("Selected : {}", selected);
-                        self.display = Some(selected);
-                    }
+                for (i, display) in screen::display_list().iter().enumerate(){
+                    ui.selectable_value(&mut self.display, Some(i), format!("🖵 Display {}  {}x{}", i, display.width, display.height));
                 }
+
             });
     }
 
@@ -487,6 +472,7 @@ impl RustShot {
 
             // This is the real one, without textarea
             curr_screenshot.pop_last_image();
+            println!("3");
             curr_screenshot.stack_image(screen_to_paint.clone());
 
             //Draw the textarea
@@ -541,11 +527,11 @@ impl RustShot {
             }
             );
             //Stop writing text if click happens somewhere
-            if img.drag_started(){
-                self.paint_info.curr_tool = Tool::None;
-            }
+             if img.drag_started(){
+                 self.paint_info.curr_tool = Tool::None;
+             }
         } else {
-            if img.dragged() {
+            if img.dragged() && self.paint_info.curr_tool != Tool::None {
                 if !self.paint_info.painting {
                     self.paint_info.painting = true;
                     self.paint_info.last_ptr =
@@ -593,7 +579,7 @@ impl RustShot {
                     self.paint_info.last_ptr = self.paint_info.curr_ptr;
                 }
                 curr_screenshot.set_tmp_image(screen_to_paint);
-            } else if img.drag_released() {
+            } else if img.drag_released() && self.paint_info.curr_tool != Tool::None {
                 if self.paint_info.curr_tool == Tool::Crop {
                     self.paint_info.curr_ptr =
                         into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
