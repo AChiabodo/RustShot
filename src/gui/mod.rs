@@ -13,6 +13,9 @@ use arboard::Clipboard;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
+use global_hotkey::{hotkey::HotKey, GlobalHotKeyEvent, GlobalHotKeyManager};
+use keyboard_types::{Code, Modifiers};
+
 use image:: DynamicImage ;
 use rfd::FileDialog;
 use screenshots::DisplayInfo;
@@ -549,6 +552,9 @@ impl App for RustShot {
             }
             Err(_) => {}
         }
+        if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
+            println!("tray event: {event:?}");
+        }
         self.render_top_panel(ctx, frame);
         self.render_central_panel(ctx, frame);
         if self.show_confirmation_dialog {
@@ -579,6 +585,11 @@ impl App for RustShot {
 }
 
 pub fn main_window() -> eframe::Result<()> {
+    let manager = GlobalHotKeyManager::new().unwrap();
+    let hotkey = HotKey::new(Some(global_hotkey::hotkey::Modifiers::SHIFT), global_hotkey::hotkey::Code::KeyD);
+
+    manager.register(hotkey).unwrap();
+
     let window_option = NativeOptions::default();
     run_native(
         "RustShot",
