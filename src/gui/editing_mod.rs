@@ -4,8 +4,10 @@ use std::collections::VecDeque;
 use eframe::egui::Pos2;
 use image::DynamicImage;
 use imageproc::drawing;
+use imageproc::rect::Rect;
+use rusttype::{Font, Scale};
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Tool {
     Drawing,
     HollowRect,
@@ -16,21 +18,56 @@ pub enum Tool {
     Eraser,
     Crop,
     Highlighter,
+    Text,
     None,
 }
 
-enum Shape {
-    Pencil { points: Vec<(usize, usize)>, thickness: usize },
-    Highlighter { points: Vec<(usize, usize)>, thickness: usize },
-    HollowRect { point: (usize, usize), width: usize, height: usize },
-    FilledRect { point: (usize, usize), width: usize, height: usize },
-    HollowCircle { center: (usize, usize), radius: usize },
-    FilledCircle { center: (usize, usize), radius: usize },
+pub struct TextManager {
+    pub curr_font: Option<Font<'static>>,
+    pub curr_str: String,
+    pub writing: bool,
+    pub edge: Pos2,
+    pub width: f32,
+    pub height: f32,
+    pub cursor: usize,
+    pub curr_dim: i32,
+    pub max_width: f32,
+    pub dirty: bool,
+    //Needed since i rewrite everytime all the text on the screen during editing
+    pub original_img: Image,
+    pub curr_font_name: String,
 }
 
-pub struct DrawObject {
-    stack_index: usize,
-    shape: Shape,
+impl TextManager {
+    pub fn new (font: String, edge: Pos2, img: Image) -> TextManager {
+        let font_bytes = include_bytes!("../../resources/Roboto-Regular.ttf");
+        let font = Font::try_from_bytes(font_bytes);
+        TextManager{
+            curr_font: font,
+            curr_font_name: "Roboto".to_string(),
+            curr_str: "".to_string(),
+            curr_dim: 15,
+            writing: false,
+            edge,
+            max_width:0.,
+            width:0.,
+            height:0.,
+            dirty: false,
+            original_img: img,
+            cursor:0,
+        }
+    }
+
+    pub fn reset(&mut self) {
+        self.curr_str = "".to_string();
+        self.curr_dim = 15;
+        self.writing = false;
+        self.max_width = 0.;
+        self.width = 0.;
+        self.height = 0.;
+        self.dirty = false;
+        self.cursor = 0;
+    }
 }
 
 
@@ -38,13 +75,25 @@ pub struct PaintState {
     pub curr_tool: Tool,
     pub curr_color: [u8; 4],
     pub curr_thickness: usize,
+    pub text_info: TextManager,
     pub painting: bool,
     pub last_ptr: Pos2,
     pub curr_ptr: Pos2,
-    pub drawn_objects: Vec<DrawObject>,
 }
 
 impl PaintState {
+
+    pub fn new()-> Self {
+        PaintState {
+            curr_tool: Tool::None,
+            curr_color: [255, 255, 255, 255],
+            curr_thickness: 1,
+            painting: false,
+            text_info: TextManager::new("Roboto-Light".to_string(), Pos2::default(), Image::new(DynamicImage::default(), 0)),
+            last_ptr: Pos2::default(),
+            curr_ptr: Pos2::default(),
+        }
+    }
     /// Reset the paint state to its default values, including the current tool and color
     pub fn reset(&mut self) {
         self.painting = false;
@@ -61,8 +110,8 @@ impl PaintState {
         self.curr_ptr = Pos2::default();
     }
 
-    ///Draw a shape on the given img based on the field inside [self] ([curr_tool], [curr_color], [last_ptr], [curr_ptr])
-    pub fn apply_tool(&self, img: &mut Image, original_img: DynamicImage) {
+    ///Draw a shape on the given img based on the field inside [self] ([curr_tool], [curr_color], [last_ptr], [curr_ptr], [curr_font], [curr_str])
+    pub fn apply_tool(&mut self, img: &mut Image, original_img: DynamicImage) {
         let mut start_ptr = self.last_ptr;
         let width = max(1, (self.curr_ptr.x - self.last_ptr.x).abs() as i32);
         let height = max(1, (self.curr_ptr.y - self.last_ptr.y).abs() as i32);
@@ -106,6 +155,17 @@ impl PaintState {
             Tool::Eraser => {
                 erase_thick_line(&original_img, &mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness);
             }
+            Tool::Text => {
+                //Unwrap cannot panic, text mode is allowed only if font loaded correctly
+                let lines:Vec<&str> = self.text_info.curr_str.split("\n").collect();
+                let mut y = self.text_info.edge.y;
+                for l in lines{
+                    drawing::draw_text_mut(&mut img.image, self.curr_color.into(), self.text_info.edge.x as i32, y as i32, rusttype::Scale::uniform(self.text_info.curr_dim as f32), self.text_info.curr_font.as_ref().unwrap(), l);
+                    y += self.text_info.curr_dim as f32;
+                }
+
+
+            }
             _ => {}
         }
     }
@@ -138,7 +198,7 @@ pub struct ImageStack {
     images: VecDeque<Image>,
     redo_images: VecDeque<Image>,
     crop_images: Vec<DynamicImage>,
-    tmp_image: Image,
+    pub tmp_image: Image,
     final_image: Image,
 }
 
@@ -240,20 +300,26 @@ impl ImageStack {
         self.images.clear();
         self.images.push_front(img.clone());
         self.tmp_image = img.clone();
-        self.final_image = img.clone();
+        self.final_image = img;
     }
     /// Clear the image stack
     pub fn clear_stack(&mut self) {
         self.images.clear();
     }
 
-    /// Save all changes made based on the current last image in the stack
+    /// Save all changes made based on the current tmp image (the one the is actually shown on the app in edit mode)
     pub fn save_changes(&mut self) {
+        // Reset all the crop_images and the crop_index for the saved image
+        self.crop_images.clear();
         self.final_image = self.get_last_image();
         self.tmp_image = self.get_last_image();
+        self.final_image.crop_index = 0;
+        self.tmp_image.crop_index = 0;
+        self.crop_images.push(self.final_image.get_image());
         self.images.clear();
         self.redo_images.clear();
         self.stack_image(self.final_image.clone());
+
     }
 
     /// Get the final image

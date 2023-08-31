@@ -19,6 +19,7 @@ egui_extras = {version = "0.22.0", features = ["svg"]}
 global-hotkey = "0.2.4"
 image = "0.24.6"
 imageproc = "0.23.0"
+rusttype = "0.9.3"
 keyboard-types = "0.7.0"
 rand = "0.8.5"
 repng = "0.2.2"

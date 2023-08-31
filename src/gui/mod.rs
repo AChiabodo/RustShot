@@ -14,10 +14,9 @@ use eframe::epaint::tessellator::Path;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
+use image::DynamicImage;
 use global_hotkey::{hotkey::HotKey, GlobalHotKeyEvent, GlobalHotKeyManager};
 use keyboard_types::{Code, Modifiers};
-
-use image:: DynamicImage ;
 use rfd::FileDialog;
 use screenshots::DisplayInfo;
 use std::borrow::Cow;
@@ -28,7 +27,8 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use eframe::emath::Rect;
-use egui::Vec2;
+use egui::{Event, PointerButton, Vec2};
+use rusttype::{Font, Scale};
 
 use self::shortcuts::ShortcutManager;
 
@@ -61,8 +61,9 @@ struct RustShot {
     shortcuts: ShortcutManager,
     icons: HashMap<String, Result<RetainedImage, String>>,
     tooltips: HashMap<String, String>,
+    fonts: HashMap<String, Option<Font<'static>>>,
     shape_window_open: bool,
-    screen_counter : u128, 
+    screen_counter : u128,
 }
 
 
@@ -74,20 +75,13 @@ impl RustShot {
         // for e.g. egui::PaintCallback.
         let (tx, rx) = channel();
         let (icons_map, tooltips_map) = load_icons();
+        let fonts_map = load_fonts();
         RustShot {
             curr_screenshot: None,
             display: Some(0),
             receiver: rx,
             sender: tx,
-            paint_info: PaintState {
-                curr_tool: Tool::None,
-                curr_color: [255, 255, 255, 255],
-                curr_thickness: 1,
-                painting: false,
-                last_ptr: Pos2::default(),
-                curr_ptr: Pos2::default(),
-                drawn_objects: Vec::new(),
-            },
+            paint_info: PaintState::new(),
             action: Action::None,
             timer: Some(0),
             allowed_to_close: true,
@@ -95,13 +89,13 @@ impl RustShot {
             shortcuts: ShortcutManager::new(),
             icons: icons_map,
             tooltips: tooltips_map,
-            shape_window_open : false,
-            screen_counter : 0 , 
+            fonts: fonts_map,
+            shape_window_open: false,
+            screen_counter : 0 ,
         }
     }
 
     fn render_top_panel(&mut self, ctx: &Context, frame: &mut Frame) {
-        
         TopBottomPanel::top("top panel").show(ctx, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 self.shortcuts.render_window(ui);
@@ -162,7 +156,6 @@ impl RustShot {
                             self.copy_image();
                         }
                     }
-
                 } else if self.action == Action::Paint {
                     self.render_paint_tools(ctx, ui);
                 }
@@ -171,7 +164,7 @@ impl RustShot {
     }
 
     fn render_central_panel(&mut self, ctx: &Context, _frame: &mut Frame) {
-        CentralPanel::default().show(ctx, |ui| match &self.curr_screenshot {
+        CentralPanel::default().show(ctx, |ui| match &mut self.curr_screenshot {
             //If screenshot is already available, then show it on the GUI
             Some(screenshot) => {
                 let screenshot = match self.action {
@@ -202,35 +195,36 @@ impl RustShot {
         });
     }
 
-    fn render_shape_window(&mut self, ctx:&Context, _ui:&mut Ui) {
+    fn render_shape_window(&mut self, ctx: &Context, _ui: &mut Ui) {
         Window::new("Choose the shape").title_bar(false).
             show(ctx, |ui| {
-                ui.group( |ui| {
-                    ui.horizontal(|ui|  {
-                    let hollow_rect_btn = self.icon_button("square", true, ctx, ui);
-                    let filled_rect_btn = self.icon_button("square-fill", true, ctx, ui);
-                    let hollow_circle_btn = self.icon_button("circle", true, ctx, ui);
-                    let filled_circle_btn = self.icon_button("circle-fill", true, ctx, ui);
-                    let arrow_btn = self.icon_button("arrow-up-right", true, ctx, ui);
-                    if hollow_rect_btn.clicked() {
-                        self.paint_info.curr_tool = Tool::HollowRect;
-                    }
-                    if filled_rect_btn.clicked() {
-                        self.paint_info.curr_tool = Tool::FilledRect;
-                    }
-                    if hollow_circle_btn.clicked() {
-                        self.paint_info.curr_tool = Tool::HollowCircle;
-                    }
-                    if filled_circle_btn.clicked() {
-                        self.paint_info.curr_tool = Tool::FilledCircle;
-                    }
-                    if arrow_btn.clicked() {
-                        self.paint_info.curr_tool = Tool::Arrow;
-                    }
-                    let close_btn = self.icon_button("x", true, ctx, ui);
-                    if close_btn.clicked() {
-                        self.shape_window_open = false;
-                    }});
+                ui.group(|ui| {
+                    ui.horizontal(|ui| {
+                        let hollow_rect_btn = self.icon_button("square", true, ctx, ui);
+                        let filled_rect_btn = self.icon_button("square-fill", true, ctx, ui);
+                        let hollow_circle_btn = self.icon_button("circle", true, ctx, ui);
+                        let filled_circle_btn = self.icon_button("circle-fill", true, ctx, ui);
+                        let arrow_btn = self.icon_button("arrow-up-right", true, ctx, ui);
+                        if hollow_rect_btn.clicked() {
+                            self.paint_info.curr_tool = Tool::HollowRect;
+                        }
+                        if filled_rect_btn.clicked() {
+                            self.paint_info.curr_tool = Tool::FilledRect;
+                        }
+                        if hollow_circle_btn.clicked() {
+                            self.paint_info.curr_tool = Tool::HollowCircle;
+                        }
+                        if filled_circle_btn.clicked() {
+                            self.paint_info.curr_tool = Tool::FilledCircle;
+                        }
+                        if arrow_btn.clicked() {
+                            self.paint_info.curr_tool = Tool::Arrow;
+                        }
+                        let close_btn = self.icon_button("x", true, ctx, ui);
+                        if close_btn.clicked() {
+                            self.shape_window_open = false;
+                        }
+                    });
                 });
             });
     }
@@ -268,6 +262,7 @@ impl RustShot {
         //Hide the application window
         self.allowed_to_close = false;
         frame.set_visible(false);
+
         let tx = self.sender.clone();
         let c = ctx.clone();
         let timer = self.timer.unwrap().clone();
@@ -316,13 +311,13 @@ impl RustShot {
     }
 
     /// Renders an ImageButton using the svg corresponding to the given name, if the svg failed to load or the name does not correspond to any svg, it spawns a button with the name passed as parameter to icon_button
-    fn icon_button(&self, name: &str, enabled:bool, ctx: &Context, ui: &mut Ui) -> Response {
+    fn icon_button(&self, name: &str, enabled: bool, ctx: &Context, ui: &mut Ui) -> Response {
         match self.icons.get(name) {
             Some(val) => match val {
                 Ok(image) => ui
                     .add_enabled(enabled, ImageButton::new(image.texture_id(ctx), image.size_vec2()))
                     .on_hover_text(self.tooltips.get(name).unwrap_or(&"Error".to_string())),
-                Err(_) => ui.add_enabled(enabled,Button::new(name)),
+                Err(_) => ui.add_enabled(enabled, Button::new(name)),
             },
             None => ui.add_enabled(enabled, Button::new(name)),
         }
@@ -350,7 +345,7 @@ impl RustShot {
             let save_paint_btn = ui.add(Button::new("Save changes"));
             //let save_paint_btn = ui.add_sized([100.0, 100.0],Button::new("Save changes"));
 
-            if self.curr_screenshot.as_ref().unwrap().get_images_len() > 1 {
+            if self.curr_screenshot.as_ref().unwrap().get_images_len() > 1 && self.paint_info.curr_tool != Tool::Text {
                 let undo_btn = self.icon_button("arrow-90deg-left", true, ctx, ui);
                 if undo_btn.clicked() {
                     let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
@@ -359,11 +354,10 @@ impl RustShot {
                     let img = curr_screenshot.get_last_image();
                     curr_screenshot.set_tmp_image(img);
                 }
+            } else {
+                let undo_btn = self.icon_button("arrow-90deg-left", false, ctx, ui);
             }
-            else {
-                let undo_btn = self.icon_button("arrow-90deg-left",  false, ctx, ui);
-            }
-            if self.curr_screenshot.as_ref().unwrap().get_redo_images_len() > 0 {
+            if self.curr_screenshot.as_ref().unwrap().get_redo_images_len() > 0 && self.paint_info.curr_tool != Tool::Text {
                 let redo_btn = self.icon_button("arrow-90deg-right", true, ctx, ui);
                 if redo_btn.clicked() {
                     let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
@@ -371,11 +365,11 @@ impl RustShot {
                     curr_screenshot.stack_image(img.clone());
                     curr_screenshot.set_tmp_image(img);
                 }
-            }
-            else {
+            } else {
                 let redo_btn = self.icon_button("arrow-90deg-right", false, ctx, ui);
             }
             let draw_btn = self.icon_button("pencil-fill", true, ctx, ui);
+            let text_btn = self.icon_button("fonts", true, ctx, ui);
             let highlighter_btn = self.icon_button("highlighter-solid", true, ctx, ui);
             let shape_btn = self.icon_button("pentagon", true, ctx, ui);
             let crop_btn = self.icon_button("crop", true, ctx, ui);
@@ -392,13 +386,31 @@ impl RustShot {
                 Tool::Eraser => self.icon("eraser-fill", ctx, ui),
                 Tool::Highlighter => self.icon("highlighter-solid", ctx, ui),
                 Tool::Crop => self.icon("crop", ctx, ui),
+                Tool::Text => self.icon("fonts", ctx, ui),
                 Tool::None => ui.add(Label::new("None")),
             };
-            if self.paint_info.curr_tool != Tool::None && self.paint_info.curr_tool != Tool::Crop && self.paint_info.curr_tool != Tool::Eraser{
+            if self.paint_info.curr_tool != Tool::None && self.paint_info.curr_tool != Tool::Crop && self.paint_info.curr_tool != Tool::Eraser {
                 ui.color_edit_button_srgba_unmultiplied(&mut self.paint_info.curr_color);
             }
-            if self.paint_info.curr_tool != Tool::None && self.paint_info.curr_tool != Tool::Crop{
+            if self.paint_info.curr_tool != Tool::None && self.paint_info.curr_tool != Tool::Crop && self.paint_info.curr_tool != Tool::Text {
                 ui.add(Slider::new(&mut self.paint_info.curr_thickness, 0..=30));
+            }
+            else if self.paint_info.curr_tool == Tool::Text {
+                ui.add(Slider::new(&mut self.paint_info.text_info.curr_dim, 0..=60));
+                egui::ComboBox::from_label("Font")
+                    .selected_text(self.paint_info.text_info.curr_font_name.clone())
+                    .show_ui(ui, |ui| {
+                        ui.style_mut().wrap = Some(false);
+                        ui.set_min_width(60.0);
+                        for s in self.fonts.keys() {
+                            ui.selectable_value(&mut self.paint_info.text_info.curr_font_name, s.clone(), s);
+                        }
+                    });
+                //If the font was not correctly loaded, keep the old one to avoid panic
+                self.paint_info.text_info.curr_font = match self.fonts.get(self.paint_info.text_info.curr_font_name.as_str()) {
+                    Some(font) => font.clone(),
+                    None => self.paint_info.text_info.curr_font.clone(),
+                }
             }
             if rmv_tool_btn.clicked() {
                 self.paint_info.curr_tool = Tool::None;
@@ -409,6 +421,12 @@ impl RustShot {
             }
             if draw_btn.clicked() {
                 self.paint_info.curr_tool = Tool::Drawing;
+            }
+            if text_btn.clicked() {
+                //Go to text mode only if the default font has been loaded correctly
+                if self.paint_info.text_info.curr_font.is_some() {
+                    self.paint_info.curr_tool = Tool::Text;
+                }
             }
             if shape_btn.clicked() {
                 self.shape_window_open = true;
@@ -428,101 +446,202 @@ impl RustShot {
     /// Logic for painting on the image
     fn paint_logic(&mut self, img: Response, ui: &mut Ui, rect: Rect) {
         let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
-        if img.dragged() {
-            if !self.paint_info.painting {
-                self.paint_info.painting = true;
-                self.paint_info.last_ptr =
-                    into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
+        if self.paint_info.curr_tool != Tool::Text && self.paint_info.text_info.dirty {
+            self.paint_info.text_info.reset();
+            //Set tmp img in order to delete the text area
+            curr_screenshot.set_tmp_image(curr_screenshot.get_last_image());
+        }
+        if self.paint_info.curr_tool == Tool::Text && !self.paint_info.text_info.writing {
+            match img.interact_pointer_pos() {
+                Some(ptr) => {
+                    //Initialization for the pop/stack in the following else if
+                    curr_screenshot.stack_image(curr_screenshot.get_last_image());
+                    self.paint_info.text_info.original_img = curr_screenshot.get_last_image();
+                    self.paint_info.text_info.dirty = true;
+                    self.paint_info.text_info.writing = true;
+                    self.paint_info.text_info.edge = into_relative_pos(ptr, img.rect);
+                    self.paint_info.text_info.height = self.paint_info.text_info.curr_dim as f32;
+                }
+                None => {}
             }
-            self.paint_info.curr_ptr = match img.hover_pos() {
-                Some(pos) => into_relative_pos(pos, img.rect),
-                None => self.paint_info.curr_ptr,
-            };
+        }
+        else if self.paint_info.curr_tool == Tool::Text && self.paint_info.text_info.writing {
+            // I need to keep updating to iterate over the events
+            ui.ctx().request_repaint();
 
-            // Automatic scrolling when using crop tool
-            if self.paint_info.curr_tool == Tool::Crop {
-                if self.paint_info.curr_ptr.x >= rect.right() - 20. {
-                    ui.scroll_with_delta(Vec2::new(rect.right() - 20. - self.paint_info.curr_ptr.x, 0.));
+            let mut screen_to_paint = self.paint_info.text_info.original_img.clone();
+            //Retrieve actual width and height of current textarea.
+            let lines: Vec<&str> = self.paint_info.text_info.curr_str.split("\n").collect();
+            self.paint_info.text_info.height = (lines.len() * self.paint_info.text_info.curr_dim as usize) as f32;
+            let mut width = 0.;
+            for l in lines {
+                let t = measure_line(self.paint_info.text_info.curr_font.as_ref().unwrap(), l, Scale::uniform(self.paint_info.text_info.curr_dim as f32));
+                if t.0 >= width{
+                    width = t.0;
                 }
-                if self.paint_info.curr_ptr.x <= rect.left() + 20. {
-                    ui.scroll_with_delta(Vec2::new(rect.left() + 20. - self.paint_info.curr_ptr.x, 0.));
-                }
-                if self.paint_info.curr_ptr.y <= rect.top() + 20. {
-                    ui.scroll_with_delta(Vec2::new(0., rect.top() + 20. - self.paint_info.curr_ptr.y));
-                }
-                if self.paint_info.curr_ptr.y >= rect.bottom() - 20. {
-                    ui.scroll_with_delta(Vec2::new(0., rect.bottom() - 20. - self.paint_info.curr_ptr.y));
-                }
-                // To make scrolling while cropping more fluid, i need to keep requesting to repaint
-                ui.ctx().request_repaint();
             }
+            self.paint_info.text_info.width = width;
 
-            let mut screen_to_paint = curr_screenshot.get_last_image();
-            match self.paint_info.curr_tool {
-                Tool::Drawing => screen_to_paint = curr_screenshot.get_tmp_image(),
-                Tool::Highlighter => screen_to_paint = curr_screenshot.get_tmp_image(),
-                Tool::Eraser => screen_to_paint = curr_screenshot.get_tmp_image(),
-                _ => {}
-            }
-            // When using Eraser, i need the latest clean version of the cropped image, when highlighting only the latest version of the image
-            let tmp = match self.paint_info.curr_tool {
-                Tool::Eraser => curr_screenshot.get_crop_image(screen_to_paint.get_crop_index()),
-                Tool::Highlighter => curr_screenshot.get_last_image().get_image(),
-                _ => curr_screenshot.get_last_image().get_image(),
-            };
+            self.paint_info.curr_tool = Tool::Text;
+            self.paint_info.apply_tool(&mut screen_to_paint, self.paint_info.text_info.original_img.get_image());
 
-            self.paint_info.apply_tool(&mut screen_to_paint, tmp);
-            if self.paint_info.curr_tool == Tool::Drawing || self.paint_info.curr_tool == Tool::Highlighter || self.paint_info.curr_tool == Tool::Eraser {
-                self.paint_info.last_ptr = self.paint_info.curr_ptr;
-            }
+            // This is the real one, without textarea
+            curr_screenshot.pop_last_image();
+            curr_screenshot.stack_image(screen_to_paint.clone());
+
+            //Draw the textarea
+            let old_color = self.paint_info.curr_color;
+            self.paint_info.curr_tool = Tool::HollowRect;
+            self.paint_info.curr_thickness = 0;
+            self.paint_info.curr_color = [0u8, 0u8, 0u8, 0u8];
+            self.paint_info.last_ptr = Pos2::new(self.paint_info.text_info.edge.x - (self.paint_info.text_info.curr_dim/4) as f32, self.paint_info.text_info.edge.y - (self.paint_info.text_info.curr_dim/4) as f32);
+            self.paint_info.curr_ptr = Pos2::new(self.paint_info.last_ptr.x + self.paint_info.text_info.width + (self.paint_info.text_info.curr_dim/4 + self.paint_info.text_info.curr_dim/4) as f32, self.paint_info.last_ptr.y + self.paint_info.text_info.height + (self.paint_info.text_info.curr_dim/4 + self.paint_info.text_info.curr_dim/4) as f32);
+            self.paint_info.apply_tool(&mut screen_to_paint, self.paint_info.text_info.original_img.get_image());
+            self.paint_info.curr_tool = Tool::Text;
+            self.paint_info.curr_color = old_color;
+
             curr_screenshot.set_tmp_image(screen_to_paint);
+            //Logic for updating the state of text_info
+            ui.input(|i| {
+                let events = &i.events;
+                for e in events {
+                    match e {
+                        Event::Text(str) => {
+                            self.paint_info.text_info.curr_str.push_str(str);
+                        }
+                        Event::Key { key, pressed, repeat, .. } => {
+                            if let egui::Key::Enter = key  {
+                                if *pressed {
+                                    self.paint_info.text_info.curr_str.push_str("\n");
+                                }
+                            }
+                            else if let egui::Key::Backspace = key  {
+                                if *pressed {
+                                    self.paint_info.text_info.curr_str.pop();
+                                }
+                            }
+                            else if let egui::Key::ArrowRight = key  {
+                                if *pressed && self.paint_info.text_info.cursor < self.paint_info.text_info.curr_str.len(){
+                                    self.paint_info.text_info.cursor += 1;
+                                }
+                            }
+                            else if let egui::Key::ArrowRight = key  {
+                                if *pressed && self.paint_info.text_info.cursor > 0{
+                                    self.paint_info.text_info.cursor -= 1;
+                                }
+                            }
+                            else if let egui::Key::Escape = key {
+                                self.paint_info.curr_tool = Tool::None;
+                            }
+                        }
 
-        } else if img.drag_released() {
-            if self.paint_info.curr_tool == Tool::Crop {
-                self.paint_info.curr_ptr =
-                    into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
-                let width = max(
-                    1,
-                    (self.paint_info.curr_ptr.x - self.paint_info.last_ptr.x).abs() as i32,
-                );
-                let height = max(
-                    1,
-                    (self.paint_info.curr_ptr.y - self.paint_info.last_ptr.y).abs() as i32,
-                );
-                //Permits an easier selection when cropping, allowing to generate the crop area in all directions
-                let mut start_ptr = self.paint_info.last_ptr;
-                if self.paint_info.curr_ptr.x < self.paint_info.last_ptr.x {
-                    start_ptr.x = self.paint_info.curr_ptr.x;
+                        _ => {}
+                    }
                 }
-                if self.paint_info.curr_ptr.y < self.paint_info.last_ptr.y {
-                    start_ptr.y = self.paint_info.curr_ptr.y;
+            }
+            );
+            //Stop writing text if click happens somewhere
+            if img.drag_started(){
+                self.paint_info.curr_tool = Tool::None;
+            }
+        } else {
+            if img.dragged() {
+                if !self.paint_info.painting {
+                    self.paint_info.painting = true;
+                    self.paint_info.last_ptr =
+                        into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
                 }
-                let curr_img = curr_screenshot.get_last_image();
-                let new_screen = curr_img.get_image().crop_imm(
-                    start_ptr.x as u32,
-                    start_ptr.y as u32,
-                    width as u32,
-                    height as u32,
-                );
-                let crop_image = curr_screenshot.get_crop_image(curr_img.get_crop_index()).crop_imm(
-                    start_ptr.x as u32,
-                    start_ptr.y as u32,
-                    width as u32,
-                    height as u32,
-                );
-                let img = editing_mod::Image::new(new_screen, curr_screenshot.get_crop_images_len());
-                curr_screenshot.stack_image(img.clone());
-                curr_screenshot.set_tmp_image(img);
-                curr_screenshot.push_crop_image(crop_image);
+                self.paint_info.curr_ptr = match img.hover_pos() {
+                    Some(pos) => into_relative_pos(pos, img.rect),
+                    None => self.paint_info.curr_ptr,
+                };
+
+                // Automatic scrolling when using crop tool
+                if self.paint_info.curr_tool == Tool::Crop {
+                    if self.paint_info.curr_ptr.x >= rect.right() - 20. {
+                        ui.scroll_with_delta(Vec2::new(rect.right() - 20. - self.paint_info.curr_ptr.x, 0.));
+                    }
+                    if self.paint_info.curr_ptr.x <= rect.left() + 20. {
+                        ui.scroll_with_delta(Vec2::new(rect.left() + 20. - self.paint_info.curr_ptr.x, 0.));
+                    }
+                    if self.paint_info.curr_ptr.y <= rect.top() + 20. {
+                        ui.scroll_with_delta(Vec2::new(0., rect.top() + 20. - self.paint_info.curr_ptr.y));
+                    }
+                    if self.paint_info.curr_ptr.y >= rect.bottom() - 20. {
+                        ui.scroll_with_delta(Vec2::new(0., rect.bottom() - 20. - self.paint_info.curr_ptr.y));
+                    }
+                    // To make scrolling while cropping more fluid, i need to keep requesting to repaint
+                    ui.ctx().request_repaint();
+                }
+
+                let mut screen_to_paint = curr_screenshot.get_last_image();
+                match self.paint_info.curr_tool {
+                    Tool::Drawing => screen_to_paint = curr_screenshot.get_tmp_image(),
+                    Tool::Highlighter => screen_to_paint = curr_screenshot.get_tmp_image(),
+                    Tool::Eraser => screen_to_paint = curr_screenshot.get_tmp_image(),
+                    _ => {}
+                }
+                // When using Eraser, i need the latest clean version of the cropped image, when highlighting only the latest version of the image
+                let tmp = match self.paint_info.curr_tool {
+                    Tool::Eraser => curr_screenshot.get_crop_image(screen_to_paint.get_crop_index()),
+                    Tool::Highlighter => curr_screenshot.get_last_image().get_image(),
+                    _ => curr_screenshot.get_last_image().get_image(),
+                };
+
+                self.paint_info.apply_tool(&mut screen_to_paint, tmp);
+                if self.paint_info.curr_tool == Tool::Drawing || self.paint_info.curr_tool == Tool::Highlighter || self.paint_info.curr_tool == Tool::Eraser {
+                    self.paint_info.last_ptr = self.paint_info.curr_ptr;
+                }
+                curr_screenshot.set_tmp_image(screen_to_paint);
+            } else if img.drag_released() {
+                if self.paint_info.curr_tool == Tool::Crop {
+                    self.paint_info.curr_ptr =
+                        into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
+                    let width = max(
+                        1,
+                        (self.paint_info.curr_ptr.x - self.paint_info.last_ptr.x).abs() as i32,
+                    );
+                    let height = max(
+                        1,
+                        (self.paint_info.curr_ptr.y - self.paint_info.last_ptr.y).abs() as i32,
+                    );
+                    //Permits an easier selection when cropping, allowing to generate the crop area in all directions
+                    let mut start_ptr = self.paint_info.last_ptr;
+                    if self.paint_info.curr_ptr.x < self.paint_info.last_ptr.x {
+                        start_ptr.x = self.paint_info.curr_ptr.x;
+                    }
+                    if self.paint_info.curr_ptr.y < self.paint_info.last_ptr.y {
+                        start_ptr.y = self.paint_info.curr_ptr.y;
+                    }
+                    let curr_img = curr_screenshot.get_last_image();
+                    let new_screen = curr_img.get_image().crop_imm(
+                        start_ptr.x as u32,
+                        start_ptr.y as u32,
+                        width as u32,
+                        height as u32,
+                    );
+                    let crop_image = curr_screenshot.get_crop_image(curr_img.get_crop_index()).crop_imm(
+                        start_ptr.x as u32,
+                        start_ptr.y as u32,
+                        width as u32,
+                        height as u32,
+                    );
+                    let img = editing_mod::Image::new(new_screen, curr_screenshot.get_crop_images_len());
+                    curr_screenshot.stack_image(img.clone());
+                    curr_screenshot.set_tmp_image(img);
+                    curr_screenshot.push_crop_image(crop_image);
+                } else {
+                    curr_screenshot.stack_image(curr_screenshot.get_tmp_image());
+                }
+                self.paint_info.soft_reset();
             }
-            else {
-                curr_screenshot.stack_image(curr_screenshot.get_tmp_image());
-            }
-            self.paint_info.soft_reset();
         }
         //Change cursor when using a tool
         match self.paint_info.curr_tool {
             Tool::None => {}
+            Tool::Text => {
+                img.on_hover_cursor(CursorIcon::Text);
+            }
             _ => {
                 img.on_hover_cursor(CursorIcon::Crosshair);
             }
@@ -553,8 +672,8 @@ impl RustShot {
             None => {}
         }
     }
-    
-    
+
+
     fn save_default_screenshot(&mut self,screenshot: &DynamicImage) {
         let mut path = String::from(self.shortcuts.default_path.clone().unwrap().into_os_string().to_str().unwrap());
         path.push_str("/screen");
@@ -572,7 +691,7 @@ impl RustShot {
             Err(err) => println!("{}", err),
         }
     }
-    
+
 }
 
 
