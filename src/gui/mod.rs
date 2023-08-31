@@ -495,7 +495,7 @@ impl RustShot {
             self.paint_info.curr_thickness = 0;
             self.paint_info.curr_color = [0u8, 0u8, 0u8, 0u8];
             self.paint_info.last_ptr = Pos2::new(self.paint_info.text_info.edge.x - (self.paint_info.text_info.curr_dim/4) as f32, self.paint_info.text_info.edge.y - (self.paint_info.text_info.curr_dim/4) as f32);
-            self.paint_info.curr_ptr = Pos2::new(self.paint_info.last_ptr.x + self.paint_info.text_info.width + (self.paint_info.text_info.curr_dim/2) as f32, self.paint_info.last_ptr.y + self.paint_info.text_info.height + (self.paint_info.text_info.curr_dim/2) as f32);
+            self.paint_info.curr_ptr = Pos2::new(self.paint_info.last_ptr.x + self.paint_info.text_info.width + (self.paint_info.text_info.curr_dim/4 + self.paint_info.text_info.curr_dim/4) as f32, self.paint_info.last_ptr.y + self.paint_info.text_info.height + (self.paint_info.text_info.curr_dim/4 + self.paint_info.text_info.curr_dim/4) as f32);
             self.paint_info.apply_tool(&mut screen_to_paint, self.paint_info.text_info.original_img.get_image());
             self.paint_info.curr_tool = Tool::Text;
             self.paint_info.curr_color = old_color;
