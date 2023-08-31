@@ -27,7 +27,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use eframe::emath::Rect;
-use egui::{Event, Vec2};
+use egui::{Event, PointerButton, Vec2};
 use rusttype::{Font, Scale};
 
 use self::shortcuts::ShortcutManager;
@@ -454,7 +454,6 @@ impl RustShot {
         if self.paint_info.curr_tool == Tool::Text && !self.paint_info.text_info.writing {
             match img.interact_pointer_pos() {
                 Some(ptr) => {
-                    println!("first click!");
                     //Initialization for the pop/stack in the following else if
                     curr_screenshot.stack_image(curr_screenshot.get_last_image());
                     self.paint_info.text_info.original_img = curr_screenshot.get_last_image();
@@ -490,7 +489,6 @@ impl RustShot {
             curr_screenshot.pop_last_image();
             curr_screenshot.stack_image(screen_to_paint.clone());
 
-
             //Draw the textarea
             let old_color = self.paint_info.curr_color;
             self.paint_info.curr_tool = Tool::HollowRect;
@@ -505,7 +503,6 @@ impl RustShot {
             curr_screenshot.set_tmp_image(screen_to_paint);
             //Logic for updating the state of text_info
             ui.input(|i| {
-                let mut end_text = false;
                 let events = &i.events;
                 for e in events {
                     match e {
@@ -516,16 +513,25 @@ impl RustShot {
                             if let egui::Key::Enter = key  {
                                 if *pressed {
                                     self.paint_info.text_info.curr_str.push_str("\n");
-
                                 }
                             }
-                            if let egui::Key::Backspace = key  {
+                            else if let egui::Key::Backspace = key  {
                                 if *pressed {
                                     self.paint_info.text_info.curr_str.pop();
                                 }
                             }
+                            else if let egui::Key::ArrowRight = key  {
+                                if *pressed && self.paint_info.text_info.cursor < self.paint_info.text_info.curr_str.len(){
+                                    self.paint_info.text_info.cursor += 1;
+                                }
+                            }
+                            else if let egui::Key::ArrowRight = key  {
+                                if *pressed && self.paint_info.text_info.cursor > 0{
+                                    self.paint_info.text_info.cursor -= 1;
+                                }
+                            }
                             else if let egui::Key::Escape = key {
-                                end_text = true;
+                                self.paint_info.curr_tool = Tool::None;
                             }
                         }
 
@@ -533,7 +539,11 @@ impl RustShot {
                     }
                 }
             }
-            )
+            );
+            //Stop writing text if click happens somewhere
+            if img.drag_started(){
+                self.paint_info.curr_tool = Tool::None;
+            }
         } else {
             if img.dragged() {
                 if !self.paint_info.painting {

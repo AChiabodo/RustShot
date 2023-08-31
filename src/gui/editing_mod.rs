@@ -29,7 +29,7 @@ pub struct TextManager {
     pub edge: Pos2,
     pub width: f32,
     pub height: f32,
-    pub _cursor: usize,
+    pub cursor: usize,
     pub curr_dim: i32,
     pub max_width: f32,
     pub dirty: bool,
@@ -54,7 +54,7 @@ impl TextManager {
             height:0.,
             dirty: false,
             original_img: img,
-            _cursor:0,
+            cursor:0,
         }
     }
 
@@ -66,7 +66,7 @@ impl TextManager {
         self.width = 0.;
         self.height = 0.;
         self.dirty = false;
-        self._cursor = 0;
+        self.cursor = 0;
     }
 }
 
