@@ -4,8 +4,7 @@ use std::collections::VecDeque;
 use eframe::egui::Pos2;
 use image::DynamicImage;
 use imageproc::drawing;
-use imageproc::rect::Rect;
-use rusttype::{Font, Scale};
+use rusttype::{Font};
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Tool {
@@ -22,20 +21,23 @@ pub enum Tool {
     None,
 }
 
+#[derive(Clone)]
 pub struct TextManager {
+    pub text_areas: Vec<TextManager>,
     pub curr_font: Option<Font<'static>>,
     pub curr_str: String,
     pub writing: bool,
     pub edge: Pos2,
     pub width: f32,
     pub height: f32,
-    pub cursor: usize,
     pub curr_dim: i32,
     pub max_width: f32,
     pub dirty: bool,
     //Needed since i rewrite everytime all the text on the screen during editing
     pub original_img: Image,
     pub curr_font_name: String,
+    pub cursor_x: usize,
+    pub cursor_y: usize,
 }
 
 impl TextManager {
@@ -43,6 +45,7 @@ impl TextManager {
         let font_bytes = include_bytes!("../../resources/Roboto-Regular.ttf");
         let font = Font::try_from_bytes(font_bytes);
         TextManager{
+            text_areas: Vec::new(),
             curr_font: font,
             curr_font_name: "Roboto".to_string(),
             curr_str: "".to_string(),
@@ -54,11 +57,13 @@ impl TextManager {
             height:0.,
             dirty: false,
             original_img: img,
-            cursor:0,
+            cursor_x:0,
+            cursor_y:0,
         }
     }
 
     pub fn reset(&mut self) {
+        self.text_areas.clear();
         self.curr_str = "".to_string();
         self.curr_dim = 15;
         self.writing = false;
@@ -66,7 +71,8 @@ impl TextManager {
         self.width = 0.;
         self.height = 0.;
         self.dirty = false;
-        self.cursor = 0;
+        self.cursor_x = 0;
+        self.cursor_y = 0;
     }
 }
 

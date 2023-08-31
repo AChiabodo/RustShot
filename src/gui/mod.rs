@@ -23,6 +23,7 @@ use std::borrow::Cow;
 use std::cmp::max;
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
@@ -431,7 +432,12 @@ impl RustShot {
     /// Logic for painting on the image
     fn paint_logic(&mut self, img: Response, ui: &mut Ui, rect: Rect) {
         let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
+        //Restart writing on old text_areas
+        if self.paint_info.curr_tool == Tool::None {
+
+        }
         if self.paint_info.curr_tool != Tool::Text && self.paint_info.text_info.dirty {
+            self.paint_info.text_info.text_areas.push(self.paint_info.text_info.clone());
             self.paint_info.text_info.reset();
             //Set tmp img in order to delete the text area
             curr_screenshot.set_tmp_image(curr_screenshot.get_last_image());
@@ -455,6 +461,20 @@ impl RustShot {
             ui.ctx().request_repaint();
 
             let mut screen_to_paint = self.paint_info.text_info.original_img.clone();
+            let mut screen_to_paint_real = self.paint_info.text_info.original_img.clone();
+
+            self.paint_info.curr_tool = Tool::Text;
+            self.paint_info.apply_tool(&mut screen_to_paint_real, self.paint_info.text_info.original_img.get_image());
+
+            // This is the real one, without textarea
+            curr_screenshot.pop_last_image();
+            curr_screenshot.stack_image(screen_to_paint_real.clone());
+
+            //Draw current cursor
+            let cursor = self.paint_info.text_info.cursor_x;
+            self.paint_info.text_info.curr_str.insert(cursor, char::from_str("_").unwrap());
+            self.paint_info.apply_tool(&mut screen_to_paint, self.paint_info.text_info.original_img.get_image());
+
             //Retrieve actual width and height of current textarea.
             let lines: Vec<&str> = self.paint_info.text_info.curr_str.split("\n").collect();
             self.paint_info.text_info.height = (lines.len() * self.paint_info.text_info.curr_dim as usize) as f32;
@@ -467,14 +487,6 @@ impl RustShot {
             }
             self.paint_info.text_info.width = width;
 
-            self.paint_info.curr_tool = Tool::Text;
-            self.paint_info.apply_tool(&mut screen_to_paint, self.paint_info.text_info.original_img.get_image());
-
-            // This is the real one, without textarea
-            curr_screenshot.pop_last_image();
-            println!("3");
-            curr_screenshot.stack_image(screen_to_paint.clone());
-
             //Draw the textarea
             let old_color = self.paint_info.curr_color;
             self.paint_info.curr_tool = Tool::HollowRect;
@@ -486,6 +498,9 @@ impl RustShot {
             self.paint_info.curr_tool = Tool::Text;
             self.paint_info.curr_color = old_color;
 
+            //Remove the added cursor from the curr_str
+            self.paint_info.text_info.curr_str.remove(cursor);
+
             curr_screenshot.set_tmp_image(screen_to_paint);
             //Logic for updating the state of text_info
             ui.input(|i| {
@@ -493,27 +508,32 @@ impl RustShot {
                 for e in events {
                     match e {
                         Event::Text(str) => {
-                            self.paint_info.text_info.curr_str.push_str(str);
+                            self.paint_info.text_info.curr_str.insert_str(self.paint_info.text_info.cursor_x, str);
+                            self.paint_info.text_info.cursor_x += str.len();
                         }
                         Event::Key { key, pressed, repeat, .. } => {
                             if let egui::Key::Enter = key  {
                                 if *pressed {
-                                    self.paint_info.text_info.curr_str.push_str("\n");
+                                    self.paint_info.text_info.curr_str.insert_str(self.paint_info.text_info.cursor_x, "\n");
+                                    self.paint_info.text_info.cursor_x += 1;
                                 }
                             }
                             else if let egui::Key::Backspace = key  {
                                 if *pressed {
-                                    self.paint_info.text_info.curr_str.pop();
+                                    if self.paint_info.text_info.cursor_x > 0{
+                                        self.paint_info.text_info.curr_str.remove(self.paint_info.text_info.cursor_x - 1 );
+                                        self.paint_info.text_info.cursor_x -= 1;
+                                    }
                                 }
                             }
                             else if let egui::Key::ArrowRight = key  {
-                                if *pressed && self.paint_info.text_info.cursor < self.paint_info.text_info.curr_str.len(){
-                                    self.paint_info.text_info.cursor += 1;
+                                if *pressed && self.paint_info.text_info.cursor_x < self.paint_info.text_info.curr_str.len(){
+                                    self.paint_info.text_info.cursor_x += 1;
                                 }
                             }
-                            else if let egui::Key::ArrowRight = key  {
-                                if *pressed && self.paint_info.text_info.cursor > 0{
-                                    self.paint_info.text_info.cursor -= 1;
+                            else if let egui::Key::ArrowLeft = key  {
+                                if *pressed && self.paint_info.text_info.cursor_x > 0{
+                                    self.paint_info.text_info.cursor_x -= 1;
                                 }
                             }
                             else if let egui::Key::Escape = key {
@@ -626,7 +646,9 @@ impl RustShot {
         match self.paint_info.curr_tool {
             Tool::None => {}
             Tool::Text => {
-                img.on_hover_cursor(CursorIcon::Text);
+                if !self.paint_info.text_info.writing{
+                    img.on_hover_cursor(CursorIcon::Text);
+                }
             }
             _ => {
                 img.on_hover_cursor(CursorIcon::Crosshair);
