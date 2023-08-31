@@ -156,7 +156,7 @@ impl PaintState {
                 erase_thick_line(&original_img, &mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness);
             }
             Tool::Text => {
-                //TODO: don't let self.painting being possible to active if the font failed to load, so that all of these unwrap cannot panic
+                //Unwrap cannot panic, text mode is allowed only if font loaded correctly
                 let lines:Vec<&str> = self.text_info.curr_str.split("\n").collect();
                 let mut y = self.text_info.edge.y;
                 for l in lines{

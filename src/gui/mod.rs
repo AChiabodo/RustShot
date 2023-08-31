@@ -406,7 +406,11 @@ impl RustShot {
                             ui.selectable_value(&mut self.paint_info.text_info.curr_font_name, s.clone(), s);
                         }
                     });
-                self.paint_info.text_info.curr_font = self.fonts.get(self.paint_info.text_info.curr_font_name.as_str()).unwrap().clone();
+                //If the font was not correctly loaded, keep the old one to avoid panic
+                self.paint_info.text_info.curr_font = match self.fonts.get(self.paint_info.text_info.curr_font_name.as_str()) {
+                    Some(font) => font.clone(),
+                    None => self.paint_info.text_info.curr_font.clone(),
+                }
             }
             if rmv_tool_btn.clicked() {
                 self.paint_info.curr_tool = Tool::None;
@@ -419,7 +423,10 @@ impl RustShot {
                 self.paint_info.curr_tool = Tool::Drawing;
             }
             if text_btn.clicked() {
-                self.paint_info.curr_tool = Tool::Text;
+                //Go to text mode only if the default font has been loaded correctly
+                if self.paint_info.text_info.curr_font.is_some() {
+                    self.paint_info.curr_tool = Tool::Text;
+                }
             }
             if shape_btn.clicked() {
                 self.shape_window_open = true;
