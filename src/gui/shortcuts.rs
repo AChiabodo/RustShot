@@ -20,7 +20,7 @@ fn check_valid_shortcut(
     return None;
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize,Clone)]
 pub struct ShortcutManager {
     shortcuts: HashMap<KeyCommand, VirtualShortcut>,
     show_window: bool,
@@ -30,7 +30,7 @@ pub struct ShortcutManager {
     key_temp: Option<Key>,
     shortcut_invalid: Option<KeyCommand>,
     pub default_path: Option<PathBuf>,
-    pub extension : String
+    pub extension : String , 
 }
 
 impl Default for ShortcutManager {
@@ -67,16 +67,19 @@ impl Default for ShortcutManager {
 }
 
 fn write_to_disk(temp: &ShortcutManager) -> anyhow::Result<()> {
-    let file = std::fs::File::open(".shortcuts".to_string())?;
-    let file = std::io::BufWriter::new(file);
-    serde_json::to_writer(file, temp)?;
+    let delete = std::fs::remove_file("./settings.txt");
+    match delete {
+        Ok(_) => {}
+        Err(_) => {}
+    }
+   let w_file = std::fs::File::options().read(true).write(true).create(true).open("./settings.txt")?;
+    serde_json::to_writer(w_file, temp)?;
     Ok(())
 }
 
 
 fn read_from_disk() -> anyhow::Result<ShortcutManager> {
-    let file = std::fs::File::open(".shortcuts".to_string())?;
-        let file = std::io::BufReader::new(file);
+    let file = std::fs::File::options().read(true).open("./settings.txt")?;
         let res : ShortcutManager = serde_json::from_reader(file)?;
         Ok(res)
 }
@@ -84,7 +87,7 @@ fn read_from_disk() -> anyhow::Result<ShortcutManager> {
 impl ShortcutManager {
     
     pub fn new() -> Self {
-        let file_path = ".shortcuts";
+        let file_path = "./settings.txt";
         match fs::metadata(file_path) {
             Ok(_) => {
                 match read_from_disk() {
@@ -190,7 +193,6 @@ impl ShortcutManager {
 
 
                     ui.columns(2, |columns|{
-                        
                         columns[0].label(format!("{}",self.default_path.as_ref().unwrap().clone().as_path().display().to_string()));
                         columns[1].vertical_centered(|ui| {
                     if ui.add(Button::new("Change default Path")).clicked() {
@@ -222,7 +224,25 @@ impl ShortcutManager {
                     
                 ui.add(eframe::egui::Separator::default());
                     if ui.add(Button::new("Save to disk")).clicked() {
-                        //write_to_disk(self); //needs to change the function
+
+                
+                        let new_scm =  ShortcutManager {
+                            shortcuts: self.shortcuts.clone(),
+                            show_window: false,
+                            waiting_for_input: self.waiting_for_input,
+                            editing_command: self.editing_command.clone(),
+                            input_changed: self.input_changed,
+                            key_temp: self.key_temp.clone(),
+                            shortcut_invalid: self.shortcut_invalid.clone(),
+                            default_path: self.default_path.clone(),
+                            extension : self.extension.clone(),
+                        };
+
+                        match write_to_disk(&new_scm)
+                        {
+                            Ok(_) => {},
+                            Err(_) => {},
+                        }; 
                         
                     }
                 }
@@ -232,7 +252,7 @@ impl ShortcutManager {
     pub fn show_window(&mut self) {
         return self.show_window = true;
     }
-
+    
     /// Use the shortcut linked to the KeyCommand passed to the function
     /// Return true if the shortcut is detected and false otherwise (or if the shortcut does not exist)
     pub fn use_shortcut(&mut self, ctx: &Context, command: &KeyCommand) -> bool {
@@ -246,7 +266,7 @@ impl ShortcutManager {
 struct VirtualKey {
     key: Key,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 struct VirtualShortcut {
     key: Key,
     modifier: Modifiers,
