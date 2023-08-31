@@ -152,6 +152,15 @@ pub fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<
     return (icons_map, tooltips_map);
 }
 
-pub fn load_fonts() -> HashMap<String, Font<'static>>{
-    HashMap::new()
+pub fn load_fonts() -> HashMap<String, Option<Font<'static>>>{
+    let mut fonts = HashMap::new();
+    let font = Font::try_from_bytes(include_bytes!("../../resources/Roboto-Regular.ttf"));
+    fonts.insert("Roboto".to_string(), font);
+    let font = Font::try_from_bytes(include_bytes!("../../resources/Phudu-Regular.ttf"));
+    fonts.insert("Phudu".to_string(), font);
+    let font = Font::try_from_bytes(include_bytes!("../../resources/Montserrat-Regular.ttf"));
+    fonts.insert("Montserrat".to_string(), font);
+    let font = Font::try_from_bytes(include_bytes!("../../resources/OpenSans-Regular.ttf"));
+    fonts.insert("OpenSans".to_string(), font);
+    return fonts;
 }

@@ -35,14 +35,16 @@ pub struct TextManager {
     pub dirty: bool,
     //Needed since i rewrite everytime all the text on the screen during editing
     pub original_img: Image,
+    pub curr_font_name: String,
 }
 
 impl TextManager {
     pub fn new (font: String, edge: Pos2, img: Image) -> TextManager {
-        let font_bytes = include_bytes!("../../resources/Roboto-Light.ttf");
+        let font_bytes = include_bytes!("../../resources/Roboto-Regular.ttf");
         let font = Font::try_from_bytes(font_bytes);
         TextManager{
             curr_font: font,
+            curr_font_name: "Roboto".to_string(),
             curr_str: "".to_string(),
             curr_dim: 15,
             writing: false,

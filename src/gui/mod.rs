@@ -61,7 +61,7 @@ struct RustShot {
     shortcuts: ShortcutManager,
     icons: HashMap<String, Result<RetainedImage, String>>,
     tooltips: HashMap<String, String>,
-    fonts: HashMap<String, Font<'static>>,
+    fonts: HashMap<String, Option<Font<'static>>>,
     shape_window_open: bool,
     screen_counter : u128,
 }
@@ -397,6 +397,16 @@ impl RustShot {
             }
             else if self.paint_info.curr_tool == Tool::Text {
                 ui.add(Slider::new(&mut self.paint_info.text_info.curr_dim, 0..=60));
+                egui::ComboBox::from_label("Font")
+                    .selected_text(self.paint_info.text_info.curr_font_name.clone())
+                    .show_ui(ui, |ui| {
+                        ui.style_mut().wrap = Some(false);
+                        ui.set_min_width(60.0);
+                        for s in self.fonts.keys() {
+                            ui.selectable_value(&mut self.paint_info.text_info.curr_font_name, s.clone(), s);
+                        }
+                    });
+                self.paint_info.text_info.curr_font = self.fonts.get(self.paint_info.text_info.curr_font_name.as_str()).unwrap().clone();
             }
             if rmv_tool_btn.clicked() {
                 self.paint_info.curr_tool = Tool::None;
