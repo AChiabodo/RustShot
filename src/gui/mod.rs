@@ -758,6 +758,8 @@ pub fn main_window() -> eframe::Result<()> {
     run_native(
         "RustShot",
         window_option,
-        Box::new(|cc| Box::new(RustShot::new(cc))),
+        Box::new(|cc| {
+            Box::new(RustShot::new(cc))
+        }),
     )
 }

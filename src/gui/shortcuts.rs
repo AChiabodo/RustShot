@@ -1,9 +1,14 @@
 use super::config_mod::KeyCommand;
 use eframe::egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window, ComboBox};
+use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
+use global_hotkey::hotkey::HotKey;
 use serde::{Deserialize, Serialize};
+use std::f32::consts::E;
 use std::fmt::{Write as _, format};
 use std::io::{Write, BufWriter};
 use std::path::PathBuf;
+use std::sync::mpsc::channel;
+use std::thread;
 use std::{collections::HashMap, fmt::Display, fs};
 use rfd::FileDialog;
 
@@ -20,7 +25,14 @@ fn check_valid_shortcut(
     return None;
 }
 
-#[derive(Debug, Serialize, Deserialize,Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
+struct ShortcutSaveFile{
+    shortcuts: HashMap<KeyCommand, VirtualShortcut>,
+    default_path: Option<PathBuf>,
+    extension : String , 
+}
+
+#[derive(Debug)]
 pub struct ShortcutManager {
     shortcuts: HashMap<KeyCommand, VirtualShortcut>,
     show_window: bool,
@@ -31,6 +43,7 @@ pub struct ShortcutManager {
     shortcut_invalid: Option<KeyCommand>,
     pub default_path: Option<PathBuf>,
     pub extension : String , 
+    rx: std::sync::mpsc::Receiver<GlobalHotKeyEvent>,
 }
 
 impl Default for ShortcutManager {
@@ -62,6 +75,7 @@ impl Default for ShortcutManager {
             shortcut_invalid: None,
             default_path: Some(PathBuf::from("./")),
             extension : ".png".to_string(),
+            rx: channel().1 ,
         };
     }
 }
@@ -73,32 +87,56 @@ fn write_to_disk(temp: &ShortcutManager) -> anyhow::Result<()> {
         Err(_) => {}
     }
    let w_file = std::fs::File::options().read(true).write(true).create(true).open("./settings.txt")?;
-    serde_json::to_writer(w_file, temp)?;
+    //serde_json::to_writer(w_file, temp)?;
     Ok(())
 }
 
 
 fn read_from_disk() -> anyhow::Result<ShortcutManager> {
     let file = std::fs::File::options().read(true).open("./settings.txt")?;
-        let res : ShortcutManager = serde_json::from_reader(file)?;
+        //let res : ShortcutManager = serde_json::from_reader(file)?;
+        let res = ShortcutManager::default();
         Ok(res)
 }
 
 impl ShortcutManager {
     
     pub fn new() -> Self {
+        let manager = GlobalHotKeyManager::new().unwrap();
+        let hotkey = HotKey::new(Some(global_hotkey::hotkey::Modifiers::SHIFT), global_hotkey::hotkey::Code::KeyA);
+
+        manager.register(hotkey).unwrap();
+
         let file_path = "./settings.txt";
-        match fs::metadata(file_path) {
+        let mut res : Self = match fs::metadata(file_path) {
             Ok(_) => {
                 match read_from_disk() {
-                    Ok(res) => {return res;},
-                    Err(_) => {return ShortcutManager::default();}
-                } ;
+                    Ok(res) => {
+                        res
+                    },
+                    Err(_) => {
+                        ShortcutManager::default()
+                    }
+                }
             }
             Err(_) => {
-                return ShortcutManager::default();
+                ShortcutManager::default()
             }
-        }
+        };
+        let (tx,rx) = channel();
+
+        thread::spawn(move || {
+            loop {
+                if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
+                    match tx.send(event) {
+                        Ok(_) => {},
+                        Err(_) => {},
+                    }
+                }
+            }
+        });
+        res.rx = rx;
+        return res;
     }
 
     pub fn render_window(&mut self, ui: &mut Ui) {
@@ -106,6 +144,12 @@ impl ShortcutManager {
             .open(&mut self.show_window)
             .resize(|r| r.resizable(true))
             .show(ui.ctx(), |ui| {
+                match self.rx.try_recv() {
+                    Ok(event) => {
+                        ui.label(format!("{:?}", event));
+                    }
+                    Err(_) => {}
+                }
                 if self.waiting_for_input {
                     ui.label("Press the key you want to use as shortcut");
                     match self.key_temp {
@@ -236,6 +280,7 @@ impl ShortcutManager {
                             shortcut_invalid: self.shortcut_invalid.clone(),
                             default_path: self.default_path.clone(),
                             extension : self.extension.clone(),
+                            rx: channel().1,
                         };
 
                         match write_to_disk(&new_scm)
@@ -260,6 +305,9 @@ impl ShortcutManager {
             Some(shortcut) => ctx.input_mut(|i| i.consume_shortcut(&shortcut.clone().into())),
             None => false,
         }
+    }
+    pub fn get_last_shortcut() -> KeyCommand {
+        return KeyCommand::None;
     }
 }
 
