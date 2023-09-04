@@ -14,7 +14,7 @@ use eframe::epaint::tessellator::Path;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
-use image::DynamicImage;
+use image::{DynamicImage, RgbaImage};
 use global_hotkey::{hotkey::HotKey, GlobalHotKeyEvent, GlobalHotKeyManager};
 use keyboard_types::{Code, Modifiers};
 use rfd::FileDialog;
@@ -25,11 +25,14 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
+use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
 use eframe::emath::Rect;
 use egui::{Event, PointerButton, Vec2};
 use rusttype::{Font, Scale};
+use tray_icon::{Icon, TrayIcon, TrayIconBuilder, TrayIconEvent};
+use tray_icon::menu::Menu;
 
 use self::shortcuts::ShortcutManager;
 
@@ -65,6 +68,8 @@ struct RustShot {
     fonts: HashMap<String, Option<Font<'static>>>,
     shape_window_open: bool,
     screen_counter : u128,
+    tray_mode: Arc<Mutex<bool>>,
+    tray_icon: TrayIcon,
 }
 
 
@@ -93,6 +98,12 @@ impl RustShot {
             fonts: fonts_map,
             shape_window_open: false,
             screen_counter : 0 ,
+            tray_mode: Arc::new(Mutex::new(false)),
+            tray_icon: TrayIconBuilder::new()
+            .with_tooltip("system-tray - tray icon library!")
+            .with_icon(Icon::from_rgba(vec![0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8, 0u8], 2, 2).unwrap())
+            .build()
+            .unwrap(),
         }
     }
 
@@ -100,7 +111,23 @@ impl RustShot {
         TopBottomPanel::top("top panel").show(ctx, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 self.shortcuts.render_window(ui);
+                let ctx2 = ctx.clone();
+                if *self.tray_mode.lock().unwrap() {
+                    frame.set_visible(false);
+                }
+                else {
+                    frame.set_visible(true);
+                }
                 if self.action == Action::None {
+                    if ui.add(Button::new("tray")).clicked(){
+                        self.tray_icon.set_visible(true).expect("TODO: dpanic message");
+                        *self.tray_mode.lock().unwrap() = true;
+                        let t = self.tray_mode.clone();
+                        TrayIconEvent::set_event_handler(Some(move |event| {
+                            *t.lock().unwrap() = false;
+                            ctx2.request_repaint();
+                        }));
+                    }
                     let screenshot_btn = ui.add(Button::new("➕ New"));
                     //Spawn edit and save only if screenshot is available
                     if self.curr_screenshot.is_some() {
@@ -432,16 +459,13 @@ impl RustShot {
     /// Logic for painting on the image
     fn paint_logic(&mut self, img: Response, ui: &mut Ui, rect: Rect) {
         let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
-        //Restart writing on old text_areas
-        if self.paint_info.curr_tool == Tool::None {
-
-        }
         if self.paint_info.curr_tool != Tool::Text && self.paint_info.text_info.dirty {
             self.paint_info.text_info.text_areas.push(self.paint_info.text_info.clone());
             self.paint_info.text_info.reset();
             //Set tmp img in order to delete the text area
             curr_screenshot.set_tmp_image(curr_screenshot.get_last_image());
         }
+        //Logic for managing writing on the image
         if self.paint_info.curr_tool == Tool::Text && !self.paint_info.text_info.writing {
             match img.interact_pointer_pos() {
                 Some(ptr) => {
@@ -511,7 +535,7 @@ impl RustShot {
                             self.paint_info.text_info.curr_str.insert_str(self.paint_info.text_info.cursor_x, str);
                             self.paint_info.text_info.cursor_x += str.len();
                         }
-                        Event::Key { key, pressed, repeat, .. } => {
+                        Event::Key { key, pressed, .. } => {
                             if let egui::Key::Enter = key  {
                                 if *pressed {
                                     self.paint_info.text_info.curr_str.insert_str(self.paint_info.text_info.cursor_x, "\n");
@@ -706,6 +730,7 @@ impl RustShot {
 
 impl App for RustShot {
     fn update(&mut self, ctx: &Context, frame: &mut Frame) {
+
         match self.receiver.try_recv() {
             Ok(screenshot) => {
                 //Show the application window again
@@ -715,9 +740,6 @@ impl App for RustShot {
                 self.curr_screenshot = Some(ImageStack::new(screenshot));
             }
             Err(_) => {}
-        }
-        if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
-            println!("tray event: {event:?}");
         }
         self.render_top_panel(ctx, frame);
         self.render_central_panel(ctx, frame);
