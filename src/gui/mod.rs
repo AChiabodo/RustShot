@@ -111,6 +111,7 @@ impl RustShot {
         TopBottomPanel::top("top panel").show(ctx, |ui| {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 self.shortcuts.render_window(ui);
+                //Logic for making the tray icon work
                 let ctx2 = ctx.clone();
                 if *self.tray_mode.lock().unwrap() {
                     frame.set_visible(false);
