@@ -247,6 +247,13 @@ impl RustShot {
         }
     }
 
+    fn undo_paint_changes(&mut self) {
+        self.paint_info.reset();
+        if self.curr_screenshot.is_some() {
+            self.curr_screenshot.as_mut().unwrap().undo_changes();
+        }
+    }
+
     fn copy_image(&mut self) {
         let mut clipboard = Clipboard::new().unwrap();
         let final_image = self.curr_screenshot.as_ref().unwrap().get_final_image().get_image();
@@ -329,6 +336,7 @@ impl RustShot {
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
             let save_paint_btn = ui.add(Button::new("Save changes"));
+            let undo_changes_btn = ui.add(Button::new("Undo all changes"));
             //let save_paint_btn = ui.add_sized([100.0, 100.0],Button::new("Save changes"));
 
             if self.curr_screenshot.as_ref().unwrap().get_images_len() > 1 && self.paint_info.curr_tool != Tool::Text {
@@ -404,6 +412,10 @@ impl RustShot {
             if save_paint_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::Edit) {
                 self.action = Action::None;
                 self.save_paint_changes();
+            }
+            if undo_changes_btn.clicked() {
+                self.action = Action::None;
+                self.undo_paint_changes();
             }
             if draw_btn.clicked() {
                 self.paint_info.curr_tool = Tool::Drawing;

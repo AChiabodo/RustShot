@@ -328,6 +328,19 @@ impl ImageStack {
 
     }
 
+    pub fn undo_changes(&mut self) {
+        // Reset all the crop_images and the crop_index for the saved image
+        self.crop_images.clear();
+        self.final_image = self.get_first_image();
+        self.tmp_image = self.get_first_image();
+        self.final_image.crop_index = 0;
+        self.tmp_image.crop_index = 0;
+        self.crop_images.push(self.final_image.get_image());
+        self.images.clear();
+        self.redo_images.clear();
+        self.stack_image(self.final_image.clone());
+    }
+
     /// Get the final image
     pub fn get_final_image(&self) -> Image {
         self.final_image.clone()
