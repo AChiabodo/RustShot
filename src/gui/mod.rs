@@ -65,6 +65,7 @@ struct RustShot {
     fonts: HashMap<String, Option<Font<'static>>>,
     shape_window_open: bool,
     screen_counter : u128,
+    rx_global: std::sync::mpsc::Receiver<GlobalHotKeyEvent>,
 }
 
 
@@ -77,6 +78,20 @@ impl RustShot {
         let (tx, rx) = channel();
         let (icons_map, tooltips_map) = load_icons();
         let fonts_map = load_fonts();
+        let (tx_global,rx_global) = channel();
+        let c = cc.egui_ctx.clone();
+        
+        thread::spawn(move || {
+            loop {
+                if let Ok(event) = GlobalHotKeyEvent::receiver().try_recv() {
+                    match tx_global.send(event) {
+                        Ok(_) => c.request_repaint(),
+                        Err(err) => println!("{}", err),
+                    }
+                }
+            }
+        });
+        
         RustShot {
             curr_screenshot: None,
             display: Some(0),
@@ -93,6 +108,7 @@ impl RustShot {
             fonts: fonts_map,
             shape_window_open: false,
             screen_counter : 0 ,
+            rx_global : rx_global
         }
     }
 
@@ -726,6 +742,12 @@ impl App for RustShot {
                 //let color_image = ColorImage::from_rgb([screenshot.width() as usize, screenshot.height() as usize], screenshot.as_bytes());
                 //self.screenshot = Some(RetainedImage::from_color_image("screenshot", color_image));
                 self.curr_screenshot = Some(ImageStack::new(screenshot));
+            }
+            Err(_) => {}
+        }
+        match self.rx_global.try_recv() {
+            Ok(_) => {
+                self.store_screenshot(frame, ctx);
             }
             Err(_) => {}
         }
