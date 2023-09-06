@@ -491,7 +491,7 @@ impl RustShot {
             let mut screen_to_paint_real = self.paint_info.text_info.original_img.clone();
 
             self.paint_info.curr_tool = Tool::Text;
-            self.paint_info.apply_tool(&mut screen_to_paint_real, self.paint_info.text_info.original_img.get_image());
+            self.paint_info.apply_tool(&mut screen_to_paint_real, Some(self.paint_info.text_info.original_img.get_image()));
 
             // This is the real one, without textarea
             curr_screenshot.pop_last_image();
@@ -500,7 +500,7 @@ impl RustShot {
             //Draw current cursor
             let cursor = self.paint_info.text_info.cursor_x;
             self.paint_info.text_info.curr_str.insert(cursor, char::from_str("_").unwrap());
-            self.paint_info.apply_tool(&mut screen_to_paint, self.paint_info.text_info.original_img.get_image());
+            self.paint_info.apply_tool(&mut screen_to_paint, Some(self.paint_info.text_info.original_img.get_image()));
 
             //Retrieve actual width and height of current textarea.
             let lines: Vec<&str> = self.paint_info.text_info.curr_str.split("\n").collect();
@@ -521,7 +521,7 @@ impl RustShot {
             self.paint_info.curr_color = [0u8, 0u8, 0u8, 0u8];
             self.paint_info.last_ptr = Pos2::new(self.paint_info.text_info.edge.x - (self.paint_info.text_info.curr_dim/4) as f32, self.paint_info.text_info.edge.y - (self.paint_info.text_info.curr_dim/4) as f32);
             self.paint_info.curr_ptr = Pos2::new(self.paint_info.last_ptr.x + self.paint_info.text_info.width + (self.paint_info.text_info.curr_dim/4 + self.paint_info.text_info.curr_dim/4) as f32, self.paint_info.last_ptr.y + self.paint_info.text_info.height + (self.paint_info.text_info.curr_dim/4 + self.paint_info.text_info.curr_dim/4) as f32);
-            self.paint_info.apply_tool(&mut screen_to_paint, self.paint_info.text_info.original_img.get_image());
+            self.paint_info.apply_tool(&mut screen_to_paint, Some(self.paint_info.text_info.original_img.get_image()));
             self.paint_info.curr_tool = Tool::Text;
             self.paint_info.curr_color = old_color;
 
@@ -607,25 +607,24 @@ impl RustShot {
                     ui.ctx().request_repaint();
                 }
 
-                let mut screen_to_paint = curr_screenshot.get_last_image();
-                match self.paint_info.curr_tool {
-                    Tool::Drawing => screen_to_paint = curr_screenshot.get_tmp_image(),
-                    Tool::Highlighter => screen_to_paint = curr_screenshot.get_tmp_image(),
-                    Tool::Eraser => screen_to_paint = curr_screenshot.get_tmp_image(),
-                    _ => {}
-                }
                 // When using Eraser, i need the latest clean version of the cropped image, when highlighting only the latest version of the image
+                // Using Option, I avoid useless "clone()" when not needed with other tools, using get_image_as_ref, i avoid other useless "clone()".
                 let tmp = match self.paint_info.curr_tool {
-                    Tool::Eraser => curr_screenshot.get_crop_image(screen_to_paint.get_crop_index()),
-                    Tool::Highlighter => curr_screenshot.get_last_image().get_image(),
-                    _ => curr_screenshot.get_last_image().get_image(),
+                    Tool::Eraser => Some(curr_screenshot.get_crop_image(curr_screenshot.get_last_image_as_ref().get_crop_index())),
+                    Tool::Highlighter => Some(curr_screenshot.get_last_image_as_ref().get_image()),
+                    _ => None,
                 };
 
-                self.paint_info.apply_tool(&mut screen_to_paint, tmp);
                 if self.paint_info.curr_tool == Tool::Drawing || self.paint_info.curr_tool == Tool::Highlighter || self.paint_info.curr_tool == Tool::Eraser {
+                    self.paint_info.apply_tool(&mut curr_screenshot.tmp_image, tmp);
+                    // This is needed for this tools, that act like continous lines
                     self.paint_info.last_ptr = self.paint_info.curr_ptr;
                 }
-                curr_screenshot.set_tmp_image(screen_to_paint);
+                else {
+                    let mut screen_to_paint = curr_screenshot.get_last_image();
+                    self.paint_info.apply_tool(&mut screen_to_paint, tmp);
+                    curr_screenshot.set_tmp_image(screen_to_paint);
+                }
             } else if img.drag_released() && self.paint_info.curr_tool != Tool::None {
                 if self.paint_info.curr_tool == Tool::Crop {
                     self.paint_info.curr_ptr =

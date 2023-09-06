@@ -117,7 +117,7 @@ impl PaintState {
     }
 
     ///Draw a shape on the given img based on the field inside [self] ([curr_tool], [curr_color], [last_ptr], [curr_ptr], [curr_font], [curr_str])
-    pub fn apply_tool(&mut self, img: &mut Image, original_img: DynamicImage) {
+    pub fn apply_tool(&mut self, img: &mut Image, original_img: Option<DynamicImage>) {
         let mut start_ptr = self.last_ptr;
         let width = max(1, (self.curr_ptr.x - self.last_ptr.x).abs() as i32);
         let height = max(1, (self.curr_ptr.y - self.last_ptr.y).abs() as i32);
@@ -152,14 +152,14 @@ impl PaintState {
                 draw_arrow(&mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness, self.curr_color.into());
             }
             Tool::Highlighter => {
-                highlight_line(&original_img, &mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness, self.curr_color.into());
+                highlight_line(original_img.as_ref().unwrap(), &mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness, self.curr_color.into());
             }
             Tool::Crop => {
                 let color = [0u8, 0u8, 0u8, 0u8];
                 drawing::draw_hollow_rect_mut(&mut img.image, imageproc::rect::Rect::at(start_ptr.x as i32, start_ptr.y as i32).of_size(width as u32, height as u32), color.into());
             }
             Tool::Eraser => {
-                erase_thick_line(&original_img, &mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness);
+                erase_thick_line(original_img.as_ref().unwrap(), &mut img.image, (self.last_ptr.x, self.last_ptr.y), (self.curr_ptr.x, self.curr_ptr.y), self.curr_thickness);
             }
             Tool::Text => {
                 //Unwrap cannot panic, text mode is allowed only if font loaded correctly
@@ -276,6 +276,13 @@ impl ImageStack {
         match self.images.front() {
             Some(img) => (*img).clone(),
             None => self.final_image.clone()
+        }
+    }
+
+    pub fn get_last_image_as_ref (&self) -> &Image {
+        match self.images.front() {
+            Some(img) => img,
+            None => &self.final_image,
         }
     }
 
