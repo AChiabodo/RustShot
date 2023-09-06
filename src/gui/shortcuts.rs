@@ -86,7 +86,6 @@ fn write_to_disk(temp: &ShortcutManager) -> anyhow::Result<()> {
 fn read_from_disk() -> anyhow::Result<ShortcutManager> {
     let file = std::fs::File::options().read(true).open("./settings.txt")?;
         let res : ShortcutManager = serde_json::from_reader(file)?;
-        let res = ShortcutManager::default();
         Ok(res)
 }
 
