@@ -12,6 +12,22 @@ use std::thread;
 use std::{collections::HashMap, fmt::Display, fs};
 use rfd::FileDialog;
 
+pub fn global_hotkey_definition() {
+    let manager = GlobalHotKeyManager::new().unwrap();
+
+    let hotkey = HotKey::new(Some(global_hotkey::hotkey::Modifiers::SHIFT), global_hotkey::hotkey::Code::KeyT);
+
+    /* Register the global hotkey to take screenshot - works only here */
+    manager.register(hotkey).unwrap();
+
+    /* Print key for screencapture */
+    let hotkey = HotKey::new(None, global_hotkey::hotkey::Code::PrintScreen);
+
+    /* Register the global hotkey to take screenshot - works only here */
+    manager.register(hotkey).unwrap();
+}
+
+
 fn check_valid_shortcut(
     shortcuts: &HashMap<KeyCommand, VirtualShortcut>,
     test_key: Key,

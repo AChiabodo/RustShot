@@ -4,7 +4,7 @@ use std::collections::VecDeque;
 use eframe::egui::Pos2;
 use image::DynamicImage;
 use imageproc::drawing;
-use rusttype::{Font};
+use rusttype::Font;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
 pub enum Tool {
@@ -41,7 +41,7 @@ pub struct TextManager {
 }
 
 impl TextManager {
-    pub fn new (font: String, edge: Pos2, img: Image) -> TextManager {
+    pub fn new (_font: String, edge: Pos2, img: Image) -> TextManager {
         let font_bytes = include_bytes!("../../resources/Roboto-Regular.ttf");
         let font = Font::try_from_bytes(font_bytes);
         TextManager{

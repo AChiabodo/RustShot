@@ -10,28 +10,25 @@ use crate::gui::config_mod::*;
 
 use eframe::egui::{Align, Button, CentralPanel, ColorImage, ComboBox, Context, CursorIcon, ImageButton, Label, Layout, Pos2, Response, ScrollArea, Sense, Slider, TopBottomPanel, Ui, Window};
 use arboard::Clipboard;
-use eframe::epaint::tessellator::Path;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
 use image::DynamicImage;
-use global_hotkey::{hotkey::HotKey, GlobalHotKeyEvent, GlobalHotKeyManager};
-use keyboard_types::{Code, Modifiers};
+use global_hotkey::GlobalHotKeyEvent;
 use rfd::FileDialog;
 use screenshots::DisplayInfo;
 use std::borrow::Cow;
 use std::cmp::max;
 use std::collections::HashMap;
-use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::Duration;
 use eframe::emath::Rect;
-use egui::{Event, PointerButton, Vec2};
+use egui::{Event, Vec2};
 use rusttype::{Font, Scale};
 
-use self::shortcuts::ShortcutManager;
+use self::shortcuts::{ShortcutManager, global_hotkey_definition};
 
 fn select_display(index: usize) -> Option<DisplayInfo> {
     let mydisp = screenshots::DisplayInfo::all();
@@ -784,10 +781,7 @@ impl App for RustShot {
 }
 
 pub fn main_window() -> eframe::Result<()> {
-    let manager = GlobalHotKeyManager::new().unwrap();
-    let hotkey = HotKey::new(Some(global_hotkey::hotkey::Modifiers::SHIFT), global_hotkey::hotkey::Code::KeyD);
-
-    manager.register(hotkey).unwrap();
+    global_hotkey_definition();
 
     let window_option = NativeOptions::default();
     run_native(

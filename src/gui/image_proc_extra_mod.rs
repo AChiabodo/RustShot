@@ -44,7 +44,7 @@ pub fn draw_thick_line_with_rect(img: &mut DynamicImage, start:(f32, f32), end:(
         t = 1;
     }
     for point in segment {
-        let top = (point.0 - t, point.1 - t);
+        let _top = (point.0 - t, point.1 - t);
         drawing::draw_filled_rect_mut(img, imageproc::rect::Rect::at(point.0 as i32, point.1 as i32).of_size(t as u32, t as u32), color.into());
     }
 }
