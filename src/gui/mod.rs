@@ -125,7 +125,7 @@ impl RustShot {
                                 None => {}
                             }
                         }
-                        let paint_btn = ui.add(Button::new("Edit"));
+                        let paint_btn = ui.add(Button::new("Edit")).on_hover_text("Edit screenshot");
                         if paint_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::Edit)
                         {
                             self.action = Action::Paint;
@@ -135,10 +135,10 @@ impl RustShot {
                         .width(80.0)
                         .selected_text(format!("🕓 {:?} sec", self.timer.unwrap()))
                         .show_ui(ui, |ui| {
-                            ui.selectable_value(&mut self.timer, Some(0), "🕓 0 sec");
-                            ui.selectable_value(&mut self.timer, Some(2), "🕓 2 sec");
-                            ui.selectable_value(&mut self.timer, Some(5), "🕓 5 sec");
-                            ui.selectable_value(&mut self.timer, Some(10), "🕓 10 sec");
+                            ui.selectable_value(&mut self.timer, Some(0), "🕓 0 sec").on_hover_text("Delay screenshot");
+                            ui.selectable_value(&mut self.timer, Some(2), "🕓 2 sec").on_hover_text("Delay screenshot");
+                            ui.selectable_value(&mut self.timer, Some(5), "🕓 5 sec").on_hover_text("Delay screenshot");
+                            ui.selectable_value(&mut self.timer, Some(10), "🕓 10 sec").on_hover_text("Delay screenshot");
                         });
                     self.display_selector(ui);
                     if screenshot_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::TakeScreenshot)
@@ -247,6 +247,13 @@ impl RustShot {
         }
     }
 
+    fn undo_paint_changes(&mut self) {
+        self.paint_info.reset();
+        if self.curr_screenshot.is_some() {
+            self.curr_screenshot.as_mut().unwrap().undo_changes();
+        }
+    }
+
     fn copy_image(&mut self) {
         let mut clipboard = Clipboard::new().unwrap();
         let final_image = self.curr_screenshot.as_ref().unwrap().get_final_image().get_image();
@@ -290,7 +297,8 @@ impl RustShot {
             .selected_text(format!("🖵 Display {:?}", self.display.unwrap()))
             .show_ui(ui, |ui| {
                 for (i, display) in screen::display_list().iter().enumerate(){
-                    ui.selectable_value(&mut self.display, Some(i), format!("🖵 Display {}  {}x{}", i, display.width, display.height));
+                    ui.selectable_value(&mut self.display, Some(i), format!("🖵 Display {}  {}x{}", i, display.width, display.height))
+                        .on_hover_text("Select display");
                 }
 
             });
@@ -328,6 +336,7 @@ impl RustShot {
             self.render_shape_window(ctx, ui);
         }
         ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
+            let undo_changes_btn = ui.add(Button::new("Exit"));
             let save_paint_btn = ui.add(Button::new("Save changes"));
             //let save_paint_btn = ui.add_sized([100.0, 100.0],Button::new("Save changes"));
 
@@ -404,6 +413,10 @@ impl RustShot {
             if save_paint_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::Edit) {
                 self.action = Action::None;
                 self.save_paint_changes();
+            }
+            if undo_changes_btn.clicked() {
+                self.action = Action::None;
+                self.undo_paint_changes();
             }
             if draw_btn.clicked() {
                 self.paint_info.curr_tool = Tool::Drawing;

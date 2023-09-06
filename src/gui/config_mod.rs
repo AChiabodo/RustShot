@@ -99,7 +99,7 @@ pub fn load_icons() -> (HashMap<String, Result<RetainedImage, String>>, HashMap<
         "x-octagon".to_string(),
         RetainedImage::from_svg_bytes("x-octagon", include_bytes!("../../resources/x-octagon.svg")),
     );
-    tooltips_map.insert("x-octagon".to_string(), "Stop using this tool".to_string());
+    tooltips_map.insert("x-octagon".to_string(), "Stop using current tool".to_string());
     icons_map.insert(
         "highlighter-solid".to_string(),
         RetainedImage::from_svg_bytes("highlighter-solid", include_bytes!("../../resources/highlighter-solid.svg")),

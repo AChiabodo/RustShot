@@ -140,7 +140,7 @@ impl ShortcutManager {
     }
 
     pub fn render_window(&mut self, ui: &mut Ui) {
-        Window::new("Shortcuts Editor".to_string())
+        Window::new("Settings".to_string())
             .open(&mut self.show_window)
             .resize(|r| r.resizable(true))
             .show(ui.ctx(), |ui| {
