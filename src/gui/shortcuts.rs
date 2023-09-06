@@ -1,14 +1,10 @@
 use super::config_mod::KeyCommand;
 use eframe::egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window, ComboBox};
-use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
+use global_hotkey::GlobalHotKeyManager;
 use global_hotkey::hotkey::HotKey;
 use serde::{Deserialize, Serialize};
-use std::f32::consts::E;
-use std::fmt::{Write as _, format};
-use std::io::{Write, BufWriter};
+use std::fmt::Write as _;
 use std::path::PathBuf;
-use std::sync::mpsc::channel;
-use std::thread;
 use std::{collections::HashMap, fmt::Display, fs};
 use rfd::FileDialog;
 
@@ -291,9 +287,6 @@ impl ShortcutManager {
             Some(shortcut) => ctx.input_mut(|i| i.consume_shortcut(&shortcut.clone().into())),
             None => false,
         }
-    }
-    pub fn get_last_shortcut() -> KeyCommand {
-        return KeyCommand::None;
     }
 }
 
