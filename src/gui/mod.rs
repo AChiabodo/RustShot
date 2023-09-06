@@ -13,8 +13,9 @@ use arboard::Clipboard;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
+use global_hotkey::hotkey::HotKey;
 use image::DynamicImage;
-use global_hotkey::GlobalHotKeyEvent;
+use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
 use rfd::FileDialog;
 use screenshots::DisplayInfo;
 use std::borrow::Cow;
@@ -781,7 +782,13 @@ impl App for RustShot {
 }
 
 pub fn main_window() -> eframe::Result<()> {
-    global_hotkey_definition();
+    let manager = GlobalHotKeyManager::new().unwrap();
+
+    let hotkey = HotKey::new(Some(global_hotkey::hotkey::Modifiers::SHIFT), global_hotkey::hotkey::Code::KeyT);
+
+    /* Register the global hotkey to take screenshot - works only here */
+    manager.register(hotkey).unwrap();
+
 
     let window_option = NativeOptions::default();
     run_native(
