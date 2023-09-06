@@ -6,6 +6,7 @@ use serde::{Serialize,Deserialize};
 #[derive(Debug,PartialEq, Eq, PartialOrd, Ord, Hash,Clone,Serialize, Deserialize)]
 pub enum KeyCommand {
     SaveScreenshot,
+    QuickSaveScreenshot,
     TakeScreenshot,
     Edit,
     Copy,
@@ -23,6 +24,9 @@ impl KeyCommand {
             },
             KeyCommand::TakeScreenshot => {
                 return "Take Screenshot".to_string();
+            },
+            KeyCommand::QuickSaveScreenshot => {
+                return "Auto Save Screenshot".to_string();
             },
             KeyCommand::None => {
                 return "None".to_string();

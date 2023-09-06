@@ -132,7 +132,7 @@ impl RustShot {
                         }
 
                         let screenshot_save_default_btn = ui.add(Button::new("💾 Save"));
-                        if screenshot_save_default_btn.clicked() // || self.shortcuts.use_shortcut(ctx, &KeyCommand::QuickSaveScreenshot)
+                        if screenshot_save_default_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::QuickSaveScreenshot)
                         {
                             match &self.curr_screenshot {
                                 Some(screenshot) => {

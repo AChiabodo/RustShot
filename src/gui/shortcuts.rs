@@ -57,6 +57,10 @@ impl Default for ShortcutManager {
             KeyCommand::Copy,
             VirtualShortcut::new(Modifiers::CTRL, Key::C),
         );
+        map.insert(
+            KeyCommand::QuickSaveScreenshot,
+            VirtualShortcut::new(Modifiers::CTRL, Key::C),
+        );
         return Self {
             shortcuts: map,
             show_window: false,
