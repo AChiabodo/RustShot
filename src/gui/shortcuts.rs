@@ -1,6 +1,5 @@
 use super::config_mod::KeyCommand;
 use eframe::egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window, ComboBox};
-use global_hotkey::GlobalHotKeyManager;
 use global_hotkey::hotkey::HotKey;
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
@@ -8,20 +7,59 @@ use std::path::PathBuf;
 use std::{collections::HashMap, fmt::Display, fs};
 use rfd::FileDialog;
 
-pub fn global_hotkey_definition() {
-    let manager = GlobalHotKeyManager::new().unwrap();
 
-    let hotkey = HotKey::new(Some(global_hotkey::hotkey::Modifiers::SHIFT), global_hotkey::hotkey::Code::KeyT);
-
-    /* Register the global hotkey to take screenshot - works only here */
-    manager.register(hotkey).unwrap();
-
-    /* Print key for screencapture */
-    let hotkey = HotKey::new(None, global_hotkey::hotkey::Code::PrintScreen);
-
-    /* Register the global hotkey to take screenshot - works only here */
-    manager.register(hotkey).unwrap();
+#[derive(Debug, Clone, Copy, PartialEq, Eq,Serialize, Deserialize)]
+pub struct SaveHotKeys {
+    modifier: global_hotkey::hotkey::Modifiers,
+    key: global_hotkey::hotkey::Code,
 }
+impl Default for SaveHotKeys{
+    fn default() -> Self {
+        SaveHotKeys {
+            modifier: global_hotkey::hotkey::Modifiers::SHIFT,
+            key: global_hotkey::hotkey::Code::KeyS,
+        }
+    }
+}
+impl SaveHotKeys{
+    pub fn new() -> Self {
+        let mut res = SaveHotKeys::default();
+        match res.read_from_disk() {
+            Ok(_) => {return res;},
+            Err(_) => {
+                res.write_to_disk().unwrap();
+                return res;
+            },
+        }
+    }
+    fn write_to_disk(&self) -> std::io::Result<()> {
+        let temp = self.clone();
+        let delete = std::fs::remove_file("./hotkeys.json");
+        match delete {
+            Ok(_) => {}
+            Err(_) => {}
+        }
+    let w_file = std::fs::File::options().read(true).write(true).create(true).open("./hotkeys.json")?;
+    serde_json::to_writer(w_file, &temp)?;
+    Ok(())
+    }
+    fn read_from_disk(&mut self) -> std::io::Result<()> {
+        let file = std::fs::File::options().read(true).open("./hotkeys.json")?;
+        let res : SaveHotKeys = serde_json::from_reader(file)?;
+        *self = res;
+        Ok(())
+    }
+    pub fn get_hotkey(&self) -> HotKey {
+        HotKey::new(Some(self.modifier), self.key)
+    }
+    pub fn get_modifiers(&self) -> global_hotkey::hotkey::Modifiers {
+        self.modifier
+    }
+    pub fn as_hotkey(&self) -> HotKey {
+        HotKey::new(Some(self.modifier), self.key)
+    }
+}
+
 
 
 fn check_valid_shortcut(

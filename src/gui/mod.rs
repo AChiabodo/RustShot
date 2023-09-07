@@ -13,7 +13,6 @@ use arboard::Clipboard;
 use eframe::{run_native, NativeOptions};
 use eframe::{App, Frame};
 use egui_extras::RetainedImage;
-use global_hotkey::hotkey::HotKey;
 use image::DynamicImage;
 use global_hotkey::{GlobalHotKeyEvent, GlobalHotKeyManager};
 use rfd::FileDialog;
@@ -29,7 +28,7 @@ use eframe::emath::Rect;
 use egui::{Event, Vec2};
 use rusttype::{Font, Scale};
 
-use self::shortcuts::{ShortcutManager, global_hotkey_definition};
+use self::shortcuts::{ShortcutManager, SaveHotKeys};
 
 fn select_display(index: usize) -> Option<DisplayInfo> {
     let mydisp = screenshots::DisplayInfo::all();
@@ -780,10 +779,12 @@ impl App for RustShot {
     }
 }
 
+
 pub fn main_window() -> eframe::Result<()> {
     let manager = GlobalHotKeyManager::new().unwrap();
 
-    let hotkey = HotKey::new(Some(global_hotkey::hotkey::Modifiers::SHIFT), global_hotkey::hotkey::Code::KeyT);
+    let hotkey = SaveHotKeys::new();
+    let hotkey = hotkey.as_hotkey();
 
     /* Register the global hotkey to take screenshot - works only here */
     manager.register(hotkey).unwrap();
