@@ -26,7 +26,7 @@ impl KeyCommand {
                 return "Take Screenshot".to_string();
             },
             KeyCommand::QuickSaveScreenshot => {
-                return "Auto Save Screenshot".to_string();
+                return "Quick Screenshot".to_string();
             },
             KeyCommand::None => {
                 return "None".to_string();

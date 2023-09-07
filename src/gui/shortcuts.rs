@@ -1,6 +1,6 @@
 use super::config_mod::KeyCommand;
 use eframe::egui::{Button, Context, Key, KeyboardShortcut, Modifiers, Ui, Window, ComboBox};
-use global_hotkey::hotkey::HotKey;
+use global_hotkey::hotkey::{HotKey, Code};
 use serde::{Deserialize, Serialize};
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -21,6 +21,17 @@ impl Default for SaveHotKeys{
         }
     }
 }
+impl Into<VirtualKey> for SaveHotKeys{
+    fn into(self) -> VirtualKey {
+        VirtualKey::from_hotkey(self.key)
+    }
+}
+impl Into<VirtualShortcut> for SaveHotKeys{
+    fn into(self) -> VirtualShortcut {
+        VirtualShortcut::new(Modifiers::SHIFT, VirtualKey::from_hotkey(self.key).into())
+    }
+}
+
 impl SaveHotKeys{
     pub fn new() -> Self {
         let mut res = SaveHotKeys::default();
@@ -31,6 +42,9 @@ impl SaveHotKeys{
                 return res;
             },
         }
+    }
+    fn to_string(&self){
+        format!("{:?} {}",self.modifier,self.key.to_string());
     }
     fn write_to_disk(&self) -> std::io::Result<()> {
         let temp = self.clone();
@@ -49,14 +63,17 @@ impl SaveHotKeys{
         *self = res;
         Ok(())
     }
-    pub fn get_hotkey(&self) -> HotKey {
-        HotKey::new(Some(self.modifier), self.key)
+    pub fn get_hotkey(&self) -> global_hotkey::hotkey::Code {
+        self.key
+    }
+    pub fn set_hotkey(&mut self, key: global_hotkey::hotkey::Code) {
+        self.key = key;
     }
     pub fn get_modifiers(&self) -> global_hotkey::hotkey::Modifiers {
         self.modifier
     }
     pub fn as_hotkey(&self) -> HotKey {
-        HotKey::new(Some(self.modifier), self.key)
+        HotKey::new(Some(self.get_modifiers()), self.get_hotkey())
     }
 }
 
@@ -67,6 +84,9 @@ fn check_valid_shortcut(
     test_key: Key,
     test_command: KeyCommand,
 ) -> Option<KeyCommand> {
+    if test_command == KeyCommand::TakeScreenshot {
+        return None;
+    }
     for (command, shortcut) in shortcuts.iter() {
         if test_command != command.clone() && shortcut.key == test_key {
             return Some(command.clone());
@@ -78,6 +98,8 @@ fn check_valid_shortcut(
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ShortcutManager {
     shortcuts: HashMap<KeyCommand, VirtualShortcut>,
+    global_shortcut : SaveHotKeys,
+    changed_global_shortcut : bool,
     show_window: bool,
     waiting_for_input: bool,
     editing_command: KeyCommand,
@@ -96,10 +118,6 @@ impl Default for ShortcutManager {
             VirtualShortcut::new(Modifiers::CTRL, Key::S),
         );
         map.insert(
-            KeyCommand::TakeScreenshot,
-            VirtualShortcut::new(Modifiers::CTRL, Key::T),
-        );
-        map.insert(
             KeyCommand::Edit,
             VirtualShortcut::new(Modifiers::CTRL, Key::E),
         );
@@ -113,6 +131,8 @@ impl Default for ShortcutManager {
         );
         return Self {
             shortcuts: map,
+            global_shortcut : SaveHotKeys::new(),
+            changed_global_shortcut : false,
             show_window: false,
             waiting_for_input: false,
             editing_command: KeyCommand::None,
@@ -126,6 +146,7 @@ impl Default for ShortcutManager {
 }
 
 fn write_to_disk(temp: &ShortcutManager) -> anyhow::Result<()> {
+    temp.global_shortcut.write_to_disk()?;
     let delete = std::fs::remove_file("./settings.txt");
     match delete {
         Ok(_) => {}
@@ -212,13 +233,25 @@ impl ShortcutManager {
                                 self.editing_command.clone(),
                             ) {
                                 None => {
-                                    if self.input_changed {
+                                    if self.input_changed && self.editing_command != KeyCommand::TakeScreenshot {
                                         match self.shortcuts.get_mut(&self.editing_command) {
                                             Some(s) => {
                                                 s.key = self.key_temp.unwrap();
                                             }
                                             None => {}
                                         }
+                                    }
+                                    else if self.editing_command == KeyCommand::TakeScreenshot {
+                                        let old = self.global_shortcut.clone();
+                                        self.global_shortcut.set_hotkey(VirtualKey::from_key(self.key_temp.unwrap()).to_hotkey());
+                                        if old != self.global_shortcut{
+                                            self.changed_global_shortcut = true;
+                                        }
+                                        match self.global_shortcut.write_to_disk() {
+                                            Ok(_) => {},
+                                            Err(_) => {},
+                                        }
+                                            
                                     }
                                     self.waiting_for_input = false;
                                     self.input_changed = false;
@@ -254,8 +287,27 @@ impl ShortcutManager {
                             });
                         });
                         ui.add(eframe::egui::Separator::default());
+                        
                     }
 
+                    ui.columns(3, |columns| {
+                        columns[0].label(format!("Screenshot"));
+                        columns[1].label(format!(
+                            "SHIFT + {}",
+                            VirtualKey::from_hotkey(self.global_shortcut.get_hotkey())
+                        ));
+                        columns[2].vertical_centered(|ui| {
+                            if ui.add(eframe::egui::Button::new("Edit")).clicked() {
+                                self.waiting_for_input = true;
+                                self.editing_command = KeyCommand::TakeScreenshot;
+                                self.key_temp = Some(VirtualKey::from_hotkey(self.global_shortcut.get_hotkey()).into());
+                            }
+                        });
+                    });
+                    if(self.changed_global_shortcut){
+                        ui.label("You have changed the global shortcut, please restart the application for the changes to take effect");
+                    }
+                    ui.add(eframe::egui::Separator::default());
 
                     ui.columns(2, |columns|{
                         columns[0].label(format!("{}",self.default_path.as_ref().unwrap().clone().as_path().display().to_string()));
@@ -293,6 +345,8 @@ impl ShortcutManager {
                 
                         let new_scm =  ShortcutManager {
                             shortcuts: self.shortcuts.clone(),
+                            global_shortcut : self.global_shortcut.clone(),
+                            changed_global_shortcut : self.changed_global_shortcut,
                             show_window: false,
                             waiting_for_input: self.waiting_for_input,
                             editing_command: self.editing_command.clone(),
@@ -330,6 +384,11 @@ impl ShortcutManager {
 
 struct VirtualKey {
     key: Key,
+}
+impl Into<Key> for VirtualKey {
+    fn into(self) -> Key {
+        self.key
+    }
 }
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct VirtualShortcut {
@@ -380,80 +439,108 @@ impl VirtualKey {
         return Self { key: key };
     }
     fn to_string(&self) -> String {
+        return format!("{}", self.key.name());
+    }
+    fn to_hotkey(self) -> Code{
         match self.key {
-            Key::A => "A".to_string(),
-            Key::B => "B".to_string(),
-            Key::C => "C".to_string(),
-            Key::D => "D".to_string(),
-            Key::E => "E".to_string(),
-            Key::F => "F".to_string(),
-            Key::G => "G".to_string(),
-            Key::H => "H".to_string(),
-            Key::I => "I".to_string(),
-            Key::J => "J".to_string(),
-            Key::K => "K".to_string(),
-            Key::L => "L".to_string(),
-            Key::M => "M".to_string(),
-            Key::N => "N".to_string(),
-            Key::O => "O".to_string(),
-            Key::P => "P".to_string(),
-            Key::Q => "Q".to_string(),
-            Key::R => "R".to_string(),
-            Key::S => "S".to_string(),
-            Key::T => "T".to_string(),
-            Key::U => "U".to_string(),
-            Key::V => "V".to_string(),
-            Key::W => "W".to_string(),
-            Key::X => "X".to_string(),
-            Key::Y => "Y".to_string(),
-            Key::Z => "Z".to_string(),
-            Key::Num0 => "0".to_string(),
-            Key::Num1 => "1".to_string(),
-            Key::Num2 => "2".to_string(),
-            Key::Num3 => "3".to_string(),
-            Key::Num4 => "4".to_string(),
-            Key::Num5 => "5".to_string(),
-            Key::Num6 => "6".to_string(),
-            Key::Num7 => "7".to_string(),
-            Key::Num8 => "8".to_string(),
-            Key::Num9 => "9".to_string(),
-            Key::Space => "Space".to_string(),
-            Key::Tab => "Tab".to_string(),
-            Key::Backspace => "Backspace".to_string(),
-            Key::Delete => "Delete".to_string(),
-            Key::Insert => "Insert".to_string(),
-            Key::ArrowDown => "ArrowDown".to_string(),
-            Key::ArrowLeft => "ArrowLeft".to_string(),
-            Key::ArrowRight => "ArrowRight".to_string(),
-            Key::ArrowUp => "ArrowUp".to_string(),
-            Key::Home => "Home".to_string(),
-            Key::End => "End".to_string(),
-            Key::PageUp => "PageUp".to_string(),
-            Key::PageDown => "PageDown".to_string(),
-            Key::Escape => "Escape".to_string(),
-            Key::Enter => "Enter".to_string(),
-            Key::F1 => "F1".to_string(),
-            Key::F2 => "F2".to_string(),
-            Key::F3 => "F3".to_string(),
-            Key::F4 => "F4".to_string(),
-            Key::F5 => "F5".to_string(),
-            Key::F6 => "F6".to_string(),
-            Key::F7 => "F7".to_string(),
-            Key::F8 => "F8".to_string(),
-            Key::F9 => "F9".to_string(),
-            Key::F10 => "F10".to_string(),
-            Key::F11 => "F11".to_string(),
-            Key::F12 => "F12".to_string(),
-            Key::F13 => "F13".to_string(),
-            Key::F14 => "F14".to_string(),
-            Key::F15 => "F15".to_string(),
-            Key::F16 => "F16".to_string(),
-            Key::F17 => "F17".to_string(),
-            Key::F18 => "F18".to_string(),
-            Key::F19 => "F19".to_string(),
-            Key::F20 => "F20".to_string(),
-            Key::Minus => "Minus".to_string(),
-            Key::PlusEquals => "PlusEquals".to_string(),
+            Key::A => Code::KeyA,
+            Key::B => Code::KeyB,
+            Key::C => Code::KeyC,
+            Key::D => Code::KeyD,
+            Key::E => Code::KeyE,
+            Key::F => Code::KeyF,
+            Key::G => Code::KeyG,
+            Key::H => Code::KeyH,
+            Key::I => Code::KeyI,
+            Key::J => Code::KeyJ,
+            Key::K => Code::KeyK,
+            Key::L => Code::KeyL,
+            Key::M => Code::KeyM,
+            Key::N => Code::KeyN,
+            Key::O => Code::KeyO,
+            Key::P => Code::KeyP,
+            Key::Q => Code::KeyQ,
+            Key::R => Code::KeyR,
+            Key::S => Code::KeyS,
+            Key::T => Code::KeyT,
+            Key::U => Code::KeyU,
+            Key::V => Code::KeyV,
+            Key::W => Code::KeyW,
+            Key::X => Code::KeyX,
+            Key::Y => Code::KeyY,
+            Key::Z => Code::KeyZ,
+            Key::Num0 => Code::Digit0,
+            Key::Num1 => Code::Digit1,
+            Key::Num2 => Code::Digit2,
+            Key::Num3 => Code::Digit3,
+            Key::Num4 => Code::Digit4,
+            Key::Num5 => Code::Digit5,
+            Key::Num6 => Code::Digit6,
+            Key::Num7 => Code::Digit7,
+            Key::Num8 => Code::Digit8,
+            Key::Num9 => Code::Digit9,
+            Key::ArrowDown => Code::ArrowDown,
+            Key::ArrowLeft => Code::ArrowLeft,
+            Key::ArrowRight => Code::ArrowRight,
+            Key::ArrowUp => Code::ArrowUp,
+            _ => {Code::KeyT}
         }
+    }
+    fn from_hotkey(hotkey: Code) -> Self {
+        let mut res = Self{key : Key::T};
+        match hotkey {
+            Code::Digit0 => res.key = Key::Num0,
+            Code::Digit1 => res.key = Key::Num1,
+            Code::Digit2 => res.key = Key::Num2,
+            Code::Digit3 => res.key = Key::Num3,
+            Code::Digit4 => res.key = Key::Num4,
+            Code::Digit5 => res.key = Key::Num5,
+            Code::Digit6 => res.key = Key::Num6,
+            Code::Digit7 => res.key = Key::Num7,
+            Code::Digit8 => res.key = Key::Num8,
+            Code::Digit9 => res.key = Key::Num9,
+            Code::KeyA => res.key = Key::A,
+            Code::KeyB => res.key = Key::B,
+            Code::KeyC => res.key = Key::C,
+            Code::KeyD => res.key = Key::D,
+            Code::KeyE => res.key = Key::E,
+            Code::KeyF => res.key = Key::F,
+            Code::KeyG => res.key = Key::G,
+            Code::KeyH => res.key = Key::H,
+            Code::KeyI => res.key = Key::I,
+            Code::KeyJ => res.key = Key::J,
+            Code::KeyK => res.key = Key::K,
+            Code::KeyL => res.key = Key::L,
+            Code::KeyM => res.key = Key::M,
+            Code::KeyN => res.key = Key::N,
+            Code::KeyO => res.key = Key::O,
+            Code::KeyP => res.key = Key::P,
+            Code::KeyQ => res.key = Key::Q,
+            Code::KeyR => res.key = Key::R,
+            Code::KeyS => res.key = Key::S,
+            Code::KeyT => res.key = Key::T,
+            Code::KeyU => res.key = Key::U,
+            Code::KeyV => res.key = Key::V,
+            Code::KeyW => res.key = Key::W,
+            Code::KeyX => res.key = Key::X,
+            Code::KeyY => res.key = Key::Y,
+            Code::KeyZ => res.key = Key::Z,
+            Code::ArrowDown => res.key = Key::ArrowDown,
+            Code::ArrowLeft => res.key = Key::ArrowLeft,
+            Code::ArrowRight => res.key = Key::ArrowRight,
+            Code::ArrowUp => res.key = Key::ArrowUp,
+            Code::Numpad0 => res.key = Key::Num0,
+            Code::Numpad1 => res.key = Key::Num1,
+            Code::Numpad2 => res.key = Key::Num2,
+            Code::Numpad3 => res.key = Key::Num3,
+            Code::Numpad4 => res.key = Key::Num4,
+            Code::Numpad5 => res.key = Key::Num5,
+            Code::Numpad6 => res.key = Key::Num6,
+            Code::Numpad7 => res.key = Key::Num7,
+            Code::Numpad8 => res.key = Key::Num8,
+            Code::Numpad9 => res.key = Key::Num9,
+                        _ => {res.key = Key::T}
+        }
+        return res;
     }
 }
