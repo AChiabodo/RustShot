@@ -23,7 +23,7 @@ use std::collections::HashMap;
 use std::str::FromStr;
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 use eframe::emath::Rect;
 use egui::{Event, Vec2};
 use rusttype::{Font, Scale};
@@ -61,7 +61,6 @@ struct RustShot {
     tooltips: HashMap<String, String>,
     fonts: HashMap<String, Option<Font<'static>>>,
     shape_window_open: bool,
-    screen_counter : u128,
     rx_global: Receiver<GlobalHotKeyEvent>,
 }
 
@@ -104,7 +103,6 @@ impl RustShot {
             tooltips: tooltips_map,
             fonts: fonts_map,
             shape_window_open: false,
-            screen_counter : 0 ,
             rx_global
         }
     }
@@ -711,8 +709,13 @@ impl RustShot {
     fn save_default_screenshot(&mut self,screenshot: &DynamicImage) {
         let mut path = String::from(self.shortcuts.default_path.clone().unwrap().into_os_string().to_str().unwrap());
         path.push_str("/screen");
-        path = path + self.screen_counter.to_string().clone().as_str() + self.shortcuts.extension.clone().as_str();
-        self.screen_counter+=1;
+        let time = match std::time::SystemTime::now().duration_since(UNIX_EPOCH)
+        {
+            Ok(time_scr)=> time_scr.as_secs().to_string(),
+            Err(_) => "".to_string(),
+        };
+
+        path = path + time.as_str() + self.shortcuts.extension.clone().as_str();
         match image::save_buffer(
             //self.default_path.unwrap()
             path,
