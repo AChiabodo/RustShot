@@ -1,10 +1,12 @@
 use crate::gui::image_proc_extra_mod::*;
 use std::cmp::max;
 use std::collections::VecDeque;
+use std::io::Cursor;
 use eframe::egui::Pos2;
 use egui::Rect;
 use image::DynamicImage;
 use imageproc::drawing;
+use png::Decoder;
 use rusttype::Font;
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -215,14 +217,68 @@ impl Image {
     pub fn get_height (&self) -> u32 {
         self.image.height()
     }
+}
 
+#[derive(Clone)]
+pub struct CompressedImage {
+    image: Vec<u8>,
+    crop_index: usize,
+}
 
+impl CompressedImage {
+    pub fn new(image: DynamicImage, crop_index: usize) -> Self {
+        let rgba_data = image.as_bytes();
+        let mut png_data = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(Cursor::new(&mut png_data), image.width(), image.height());
+            encoder.set_color(png::ColorType::Rgba);
+            encoder.set_depth(png::BitDepth::Eight);
 
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(&rgba_data).unwrap();
+        }
+        CompressedImage { image: png_data, crop_index }
+    }
+    pub fn get_decompressed_image(&self) -> DynamicImage {
+        let png_data = self.image.clone();
+        // Create a decoder for the PNG data
+        let cursor = Cursor::new(png_data);
+        let decoder = Decoder::new(cursor);
+
+        // Read the PNG data and decode it
+        let mut reader = decoder.read_info().unwrap();
+        let mut image_data = vec![0; reader.output_buffer_size()];
+        reader.next_frame(&mut image_data).unwrap();
+
+        // Convert the decoded image data to a DynamicImage
+        let image = image::DynamicImage::ImageRgba8(image::RgbaImage::from_raw(
+            reader.info().width,
+            reader.info().height,
+            image_data,
+        ).unwrap());
+        return image;
+    }
+
+    pub fn get_crop_index(&self) -> usize {
+        self.crop_index
+    }
+}
+
+impl Into<CompressedImage> for Image {
+    fn into(self) -> CompressedImage {
+        CompressedImage::new(self.image, self.crop_index)
+    }
+}
+
+impl Into<Image> for CompressedImage {
+    fn into(self) -> Image {
+        Image::new(self.get_decompressed_image(), self.get_crop_index())
+    }
 }
 
 pub struct ImageStack {
-    images: VecDeque<Image>,
-    redo_images: VecDeque<Image>,
+    images: VecDeque<CompressedImage>,
+    redo_images: VecDeque<CompressedImage>,
     crop_images: Vec<DynamicImage>,
     pub tmp_image: Image,
     final_image: Image,
@@ -231,7 +287,7 @@ pub struct ImageStack {
 impl ImageStack {
     pub fn new(image: DynamicImage) -> Self {
         let mut images = VecDeque::new();
-        images.push_front(Image::new(image.clone(), 0));
+        images.push_front(CompressedImage::new(image.clone(), 0));
         let mut crop_images = Vec::new();
         crop_images.push(image.clone());
         ImageStack {
@@ -257,12 +313,17 @@ impl ImageStack {
 
     /// Push a new image to the redo_images stack
     pub fn push_redo_image(&mut self, image: Image) {
-        self.redo_images.push_front(image);
+        self.redo_images.push_front(image.into());
     }
 
     /// Push an image from the redo_images stack
     pub fn pop_redo_image(&mut self) -> Option<Image> {
-        self.redo_images.pop_front()
+        match self.redo_images.pop_front(){
+            None => {None}
+            Some(img) => {
+                Some(img.into())
+            }
+        }
     }
 
     pub fn get_images_len(&self) -> usize {
@@ -276,7 +337,7 @@ impl ImageStack {
     /// Pop the last stacked image in the image stack, removing it. Returns [final image] if the stack is empty
     pub fn pop_last_image(&mut self) -> Image {
         match self.images.pop_front() {
-            Some(img) => img,
+            Some(img) => img.into(),
             None => self.final_image.clone()
         }
     }
@@ -294,22 +355,19 @@ impl ImageStack {
     /// Get the last stacked image in the image stack, without removing it. Returns [final image] if the stack is empty
     pub fn get_last_image(&self) -> Image {
         match self.images.front() {
-            Some(img) => (*img).clone(),
+            Some(img) => (*img).clone().into(),
             None => self.final_image.clone()
         }
     }
 
-    pub fn get_last_image_as_ref (&self) -> &Image {
-        match self.images.front() {
-            Some(img) => img,
-            None => &self.final_image,
-        }
+    pub fn get_last_image_as_ref (&self) -> &CompressedImage {
+        self.images.front().unwrap()
     }
 
     /// Get the first stacked image in the image stack, without removing it. Returns [final image] if the stack is empty
     pub fn get_first_image(&self) -> Image {
         match self.images.back() {
-            Some(img) => (*img).clone(),
+            Some(img) => (*img).clone().into(),
             None => self.final_image.clone()
         }
     }
@@ -324,16 +382,16 @@ impl ImageStack {
 
     /// Stack an image in the image stack
     pub fn stack_image(&mut self, image: Image) {
-        self.images.push_front(image);
+        self.images.push_front(image.into());
     }
 
     /// Restore the image_stack to the first stacked image, or to [final image] if the stack is empty
     pub fn restore(&mut self) {
-        let img = self.images.pop_back().unwrap_or(self.final_image.clone());
+        let img = self.images.pop_back().unwrap_or(self.final_image.clone().into());
         self.images.clear();
         self.images.push_front(img.clone());
-        self.tmp_image = img.clone();
-        self.final_image = img;
+        self.tmp_image = img.clone().into();
+        self.final_image = self.tmp_image.clone();
     }
     /// Clear the image stack
     pub fn _clear_stack(&mut self) {

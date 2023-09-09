@@ -611,7 +611,7 @@ impl RustShot {
                 // Using Option, I avoid useless "clone()" when not needed with other tools, using get_image_as_ref, i avoid other useless "clone()".
                 let tmp = match self.paint_info.curr_tool {
                     Tool::Eraser => Some(curr_screenshot.get_crop_image(curr_screenshot.get_last_image_as_ref().get_crop_index())),
-                    Tool::Highlighter => Some(curr_screenshot.get_last_image_as_ref().get_image()),
+                    Tool::Highlighter => Some(curr_screenshot.get_last_image_as_ref().get_decompressed_image()),
                     _ => None,
                 };
 
