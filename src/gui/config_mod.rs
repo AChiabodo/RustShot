@@ -15,26 +15,25 @@ pub enum KeyCommand {
 
 impl KeyCommand {
     pub fn to_string(&self) -> String {
-        match self {
+        return match self {
             KeyCommand::Edit => {
-                return "Edit".to_string();
+                "Edit".to_string()
             },
             KeyCommand::SaveScreenshot => {
-                return "Save Screenshot".to_string();
+                "Save Screenshot".to_string()
             },
             KeyCommand::TakeScreenshot => {
-                return "Take Screenshot".to_string();
+                "Take Screenshot".to_string()
             },
             KeyCommand::QuickSaveScreenshot => {
-                return "Quick Screenshot".to_string();
+                "Quick Screenshot".to_string()
             },
             KeyCommand::None => {
-                return "None".to_string();
+                "None".to_string()
             },
             KeyCommand::Copy => {
-                return "Copy".to_string();
+                "Copy".to_string()
             },
-
         }
     }
 }

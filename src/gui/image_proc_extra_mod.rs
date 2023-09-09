@@ -33,7 +33,7 @@ pub fn draw_arrow (img: &mut DynamicImage, start:(f32, f32), end:(f32, f32), t: 
 pub fn draw_thick_line(img: &mut DynamicImage, start:(f32, f32), end:(f32, f32), t: usize, color: [u8; 4]) {
     let segment = bresenham_line(start.0 as usize, start.1 as usize, end.0 as usize, end.1 as usize);
     for point in segment {
-        drawing::draw_filled_circle_mut(img, (point.0 as i32, point.1 as i32), t as i32, color.into());
+        draw_filled_circle_mut(img, (point.0 as i32, point.1 as i32), t as i32, color.into());
     }
 }
 

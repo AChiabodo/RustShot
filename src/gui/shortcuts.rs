@@ -11,13 +11,13 @@ use rfd::FileDialog;
 #[derive(Debug, Clone, Copy, PartialEq, Eq,Serialize, Deserialize)]
 pub struct SaveHotKeys {
     modifier: global_hotkey::hotkey::Modifiers,
-    key: global_hotkey::hotkey::Code,
+    key: Code,
 }
 impl Default for SaveHotKeys{
     fn default() -> Self {
         SaveHotKeys {
             modifier: global_hotkey::hotkey::Modifiers::SHIFT,
-            key: global_hotkey::hotkey::Code::KeyS,
+            key: Code::KeyS,
         }
     }
 }
@@ -35,11 +35,11 @@ impl Into<VirtualShortcut> for SaveHotKeys{
 impl SaveHotKeys{
     pub fn new() -> Self {
         let mut res = SaveHotKeys::default();
-        match res.read_from_disk() {
-            Ok(_) => {return res;},
+        return match res.read_from_disk() {
+            Ok(_) => { res },
             Err(_) => {
                 res.write_to_disk().unwrap();
-                return res;
+                res
             },
         }
     }
@@ -48,25 +48,25 @@ impl SaveHotKeys{
     }
     fn write_to_disk(&self) -> std::io::Result<()> {
         let temp = self.clone();
-        let delete = std::fs::remove_file("./hotkeys.json");
+        let delete = fs::remove_file("./hotkeys.json");
         match delete {
             Ok(_) => {}
             Err(_) => {}
         }
-    let w_file = std::fs::File::options().read(true).write(true).create(true).open("./hotkeys.json")?;
+    let w_file = fs::File::options().read(true).write(true).create(true).open("./hotkeys.json")?;
     serde_json::to_writer(w_file, &temp)?;
     Ok(())
     }
     fn read_from_disk(&mut self) -> std::io::Result<()> {
-        let file = std::fs::File::options().read(true).open("./hotkeys.json")?;
+        let file = fs::File::options().read(true).open("./hotkeys.json")?;
         let res : SaveHotKeys = serde_json::from_reader(file)?;
         *self = res;
         Ok(())
     }
-    pub fn get_hotkey(&self) -> global_hotkey::hotkey::Code {
+    pub fn get_hotkey(&self) -> Code {
         self.key
     }
-    pub fn set_hotkey(&mut self, key: global_hotkey::hotkey::Code) {
+    pub fn set_hotkey(&mut self, key: Code) {
         self.key = key;
     }
     pub fn get_modifiers(&self) -> global_hotkey::hotkey::Modifiers {
@@ -147,19 +147,19 @@ impl Default for ShortcutManager {
 
 fn write_to_disk(temp: &ShortcutManager) -> anyhow::Result<()> {
     temp.global_shortcut.write_to_disk()?;
-    let delete = std::fs::remove_file("./settings.txt");
+    let delete = fs::remove_file("./settings.txt");
     match delete {
         Ok(_) => {}
         Err(_) => {}
     }
-   let w_file = std::fs::File::options().read(true).write(true).create(true).open("./settings.txt")?;
+   let w_file = fs::File::options().read(true).write(true).create(true).open("./settings.txt")?;
     serde_json::to_writer(w_file, temp)?;
     Ok(())
 }
 
 
 fn read_from_disk() -> anyhow::Result<ShortcutManager> {
-    let file = std::fs::File::options().read(true).open("./settings.txt")?;
+    let file = fs::File::options().read(true).open("./settings.txt")?;
         let res : ShortcutManager = serde_json::from_reader(file)?;
         Ok(res)
 }
@@ -215,17 +215,17 @@ impl ShortcutManager {
                     });
                     match &self.shortcut_invalid {
                         Some(command) => {
-                            ui.add(eframe::egui::Separator::default());
-                            eframe::egui::Grid::new("Invalid Shortcut").show(ui, |ui| {
+                            ui.add(egui::Separator::default());
+                            egui::Grid::new("Invalid Shortcut").show(ui, |ui| {
                                 ui.label("This shortcut is already in use for :");
                                 ui.label(command.to_string());
                             });
-                            ui.add(eframe::egui::Separator::default());
+                            ui.add(egui::Separator::default());
                         }
                         None => {}
                     }
-                    ui.add(eframe::egui::Separator::default());
-                    eframe::egui::Grid::new(self.waiting_for_input).show(ui, |ui| {
+                    ui.add(egui::Separator::default());
+                    egui::Grid::new(self.waiting_for_input).show(ui, |ui| {
                         if ui.add(Button::new("Confirm")).clicked() {
                             match check_valid_shortcut(
                                 &self.shortcuts,
@@ -279,14 +279,14 @@ impl ShortcutManager {
                                 VirtualKey::from_key(shortcut.key.clone())
                             ));
                             columns[2].vertical_centered(|ui| {
-                                if ui.add(eframe::egui::Button::new("Edit")).clicked() {
+                                if ui.add(Button::new("Edit")).clicked() {
                                     self.waiting_for_input = true;
                                     self.editing_command = command.clone();
                                     self.key_temp = Some(shortcut.key.clone());
                                 }
                             });
                         });
-                        ui.add(eframe::egui::Separator::default());
+                        ui.add(egui::Separator::default());
                         
                     }
 
@@ -297,17 +297,17 @@ impl ShortcutManager {
                             VirtualKey::from_hotkey(self.global_shortcut.get_hotkey())
                         ));
                         columns[2].vertical_centered(|ui| {
-                            if ui.add(eframe::egui::Button::new("Edit")).clicked() {
+                            if ui.add(Button::new("Edit")).clicked() {
                                 self.waiting_for_input = true;
                                 self.editing_command = KeyCommand::TakeScreenshot;
                                 self.key_temp = Some(VirtualKey::from_hotkey(self.global_shortcut.get_hotkey()).into());
                             }
                         });
                     });
-                    if(self.changed_global_shortcut){
+                    if self.changed_global_shortcut {
                         ui.label("You have changed the global shortcut, please restart the application for the changes to take effect");
                     }
-                    ui.add(eframe::egui::Separator::default());
+                    ui.add(egui::Separator::default());
 
                     ui.columns(2, |columns|{
                         columns[0].label(format!("{}",self.default_path.as_ref().unwrap().clone().as_path().display().to_string()));
@@ -323,7 +323,7 @@ impl ShortcutManager {
                         }
                     }});       
                     });
-                    ui.add(eframe::egui::Separator::default());
+                    ui.add(egui::Separator::default());
                     ui.columns(2, |columns|{
                         columns[0].label(format!("Extension"));
                         columns[1].vertical_centered(|ui| {
@@ -339,7 +339,7 @@ impl ShortcutManager {
                     });
                 });
                     
-                ui.add(eframe::egui::Separator::default());
+                ui.add(egui::Separator::default());
                     if ui.add(Button::new("Save to disk")).clicked() {
 
                 
@@ -424,8 +424,8 @@ impl From<KeyboardShortcut> for VirtualShortcut {
 impl VirtualShortcut {
     fn new(modifier: Modifiers, key: Key) -> Self {
         Self {
-            key: key,
-            modifier: modifier,
+            key,
+            modifier,
         }
     }
 }
@@ -436,7 +436,7 @@ impl Display for VirtualKey {
 }
 impl VirtualKey {
     fn from_key(key: Key) -> Self {
-        return Self { key: key };
+        return Self { key };
     }
     fn to_string(&self) -> String {
         return format!("{}", self.key.name());

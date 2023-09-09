@@ -262,12 +262,12 @@ impl ImageStack {
     }
 
     ///Get the width of the final image
-    pub fn get_width(&self) -> usize {
+    pub fn _get_width(&self) -> usize {
         return self.final_image.image.width() as usize;
     }
 
     ///Get the height of the final image
-    pub fn get_height(&self) -> usize {
+    pub fn _get_height(&self) -> usize {
         return self.final_image.image.height() as usize;
     }
 
@@ -316,7 +316,7 @@ impl ImageStack {
         self.final_image = img;
     }
     /// Clear the image stack
-    pub fn clear_stack(&mut self) {
+    pub fn _clear_stack(&mut self) {
         self.images.clear();
     }
 
@@ -353,7 +353,7 @@ impl ImageStack {
         self.final_image.clone()
     }
 
-    pub fn set_final_image(&mut self, image: Image) {
+    pub fn _set_final_image(&mut self, image: Image) {
         self.final_image = image;
     }
 }

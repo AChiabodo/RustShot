@@ -31,7 +31,7 @@ use rusttype::{Font, Scale};
 use self::shortcuts::{ShortcutManager, SaveHotKeys};
 
 fn select_display(index: usize) -> Option<DisplayInfo> {
-    let mydisp = screenshots::DisplayInfo::all();
+    let mydisp = DisplayInfo::all();
     match mydisp {
         Ok(disp) =>
             Some(disp[index]),
@@ -62,7 +62,7 @@ struct RustShot {
     fonts: HashMap<String, Option<Font<'static>>>,
     shape_window_open: bool,
     screen_counter : u128,
-    rx_global: std::sync::mpsc::Receiver<GlobalHotKeyEvent>,
+    rx_global: Receiver<GlobalHotKeyEvent>,
 }
 
 
@@ -105,7 +105,7 @@ impl RustShot {
             fonts: fonts_map,
             shape_window_open: false,
             screen_counter : 0 ,
-            rx_global : rx_global
+            rx_global
         }
     }
 
@@ -244,7 +244,7 @@ impl RustShot {
     }
 
     /// Used to restore state of the screenshot when undoing paint changes
-    fn restore_from_paint(&mut self) {
+    fn _restore_from_paint(&mut self) {
         self.paint_info.reset();
         //Restore the original screenshot
         if self.curr_screenshot.is_some() {
@@ -276,7 +276,7 @@ impl RustShot {
             height: final_image.height() as usize,
             bytes: Cow::from(bytes),
         };
-        let done = clipboard.set_image(img);
+        let _done = clipboard.set_image(img);
     }
 
     fn store_screenshot(&mut self, frame: &mut Frame, ctx: &Context) {
@@ -305,7 +305,6 @@ impl RustShot {
     }
 
     fn display_selector(&mut self, ui: &mut Ui) {
-        let mut selected = 0;
         ComboBox::from_id_source(0)
             .selected_text(format!("🖵 Display {:?}", self.display.unwrap()))
             .show_ui(ui, |ui| {
@@ -363,7 +362,7 @@ impl RustShot {
                     curr_screenshot.set_tmp_image(img);
                 }
             } else {
-                let undo_btn = self.icon_button("arrow-90deg-left", false, ctx, ui);
+                let _undo_btn = self.icon_button("arrow-90deg-left", false, ctx, ui);
             }
             if self.curr_screenshot.as_ref().unwrap().get_redo_images_len() > 0 && self.paint_info.curr_tool != Tool::Text {
                 let redo_btn = self.icon_button("arrow-90deg-right", true, ctx, ui);
@@ -374,7 +373,7 @@ impl RustShot {
                     curr_screenshot.set_tmp_image(img);
                 }
             } else {
-                let redo_btn = self.icon_button("arrow-90deg-right", false, ctx, ui);
+                let _redo_btn = self.icon_button("arrow-90deg-right", false, ctx, ui);
             }
             let draw_btn = self.icon_button("pencil-fill", true, ctx, ui);
             let text_btn = self.icon_button("fonts", true, ctx, ui);
@@ -384,7 +383,7 @@ impl RustShot {
             let eraser_btn = self.icon_button("eraser-fill", true, ctx, ui);
             let rmv_tool_btn = self.icon_button("x-octagon", true, ctx, ui);
             ui.label("Current tool:");
-            let curr_tool = match self.paint_info.curr_tool {
+            let _curr_tool = match self.paint_info.curr_tool {
                 Tool::Drawing => self.icon("pencil-fill", ctx, ui),
                 Tool::HollowRect => self.icon("square", ctx, ui),
                 Tool::FilledRect => self.icon("square-fill", ctx, ui),
@@ -405,7 +404,7 @@ impl RustShot {
             }
             else if self.paint_info.curr_tool == Tool::Text {
                 ui.add(Slider::new(&mut self.paint_info.text_info.curr_dim, 0..=60));
-                egui::ComboBox::from_label("Font")
+                ComboBox::from_label("Font")
                     .selected_text(self.paint_info.text_info.curr_font_name.clone())
                     .show_ui(ui, |ui| {
                         ui.style_mut().wrap = Some(false);
@@ -458,10 +457,6 @@ impl RustShot {
     /// Logic for painting on the image
     fn paint_logic(&mut self, img: Response, ui: &mut Ui, rect: Rect) {
         let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
-        //Restart writing on old text_areas
-        if self.paint_info.curr_tool == Tool::None {
-
-        }
         if self.paint_info.curr_tool != Tool::Text && self.paint_info.text_info.dirty {
             self.paint_info.text_info.text_areas.push(self.paint_info.text_info.clone());
             self.paint_info.text_info.reset();
@@ -537,7 +532,7 @@ impl RustShot {
                             self.paint_info.text_info.curr_str.insert_str(self.paint_info.text_info.cursor_x, str);
                             self.paint_info.text_info.cursor_x += str.len();
                         }
-                        Event::Key { key, pressed, repeat, .. } => {
+                        Event::Key { key, pressed, .. } => {
                             if let egui::Key::Enter = key  {
                                 if *pressed {
                                     self.paint_info.text_info.curr_str.insert_str(self.paint_info.text_info.cursor_x, "\n");
@@ -657,7 +652,7 @@ impl RustShot {
                         width as u32,
                         height as u32,
                     );
-                    let img = editing_mod::Image::new(new_screen, curr_screenshot.get_crop_images_len());
+                    let img = Image::new(new_screen, curr_screenshot.get_crop_images_len());
                     curr_screenshot.stack_image(img.clone());
                     curr_screenshot.set_tmp_image(img);
                     curr_screenshot.push_crop_image(crop_image);
