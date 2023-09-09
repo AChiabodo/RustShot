@@ -172,7 +172,8 @@ impl ShortcutManager {
         let res : Self = match fs::metadata(file_path) {
             Ok(_) => {
                 match read_from_disk() {
-                    Ok(res) => {
+                    Ok(mut res) => {
+                        res.changed_global_shortcut = false;
                         res
                     },
                     Err(_) => {
