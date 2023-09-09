@@ -8,12 +8,13 @@ use std::{collections::HashMap, fmt::Display, fs};
 use rfd::FileDialog;
 
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq,Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SaveHotKeys {
     modifier: global_hotkey::hotkey::Modifiers,
     key: Code,
 }
-impl Default for SaveHotKeys{
+
+impl Default for SaveHotKeys {
     fn default() -> Self {
         SaveHotKeys {
             modifier: global_hotkey::hotkey::Modifiers::SHIFT,
@@ -21,30 +22,32 @@ impl Default for SaveHotKeys{
         }
     }
 }
-impl Into<VirtualKey> for SaveHotKeys{
+
+impl Into<VirtualKey> for SaveHotKeys {
     fn into(self) -> VirtualKey {
         VirtualKey::from_hotkey(self.key)
     }
 }
-impl Into<VirtualShortcut> for SaveHotKeys{
+
+impl Into<VirtualShortcut> for SaveHotKeys {
     fn into(self) -> VirtualShortcut {
         VirtualShortcut::new(Modifiers::SHIFT, VirtualKey::from_hotkey(self.key).into())
     }
 }
 
-impl SaveHotKeys{
+impl SaveHotKeys {
     pub fn new() -> Self {
         let mut res = SaveHotKeys::default();
         return match res.read_from_disk() {
-            Ok(_) => { res },
+            Ok(_) => { res }
             Err(_) => {
                 res.write_to_disk().unwrap();
                 res
-            },
-        }
+            }
+        };
     }
-    fn to_string(&self){
-        format!("{:?} {}",self.modifier,self.key.to_string());
+    fn to_string(&self) {
+        format!("{:?} {}", self.modifier, self.key.to_string());
     }
     fn write_to_disk(&self) -> std::io::Result<()> {
         let temp = self.clone();
@@ -53,13 +56,13 @@ impl SaveHotKeys{
             Ok(_) => {}
             Err(_) => {}
         }
-    let w_file = fs::File::options().read(true).write(true).create(true).open("./hotkeys.json")?;
-    serde_json::to_writer(w_file, &temp)?;
-    Ok(())
+        let w_file = fs::File::options().read(true).write(true).create(true).open("./hotkeys.json")?;
+        serde_json::to_writer(w_file, &temp)?;
+        Ok(())
     }
     fn read_from_disk(&mut self) -> std::io::Result<()> {
         let file = fs::File::options().read(true).open("./hotkeys.json")?;
-        let res : SaveHotKeys = serde_json::from_reader(file)?;
+        let res: SaveHotKeys = serde_json::from_reader(file)?;
         *self = res;
         Ok(())
     }
@@ -76,7 +79,6 @@ impl SaveHotKeys{
         HotKey::new(Some(self.get_modifiers()), self.get_hotkey())
     }
 }
-
 
 
 fn check_valid_shortcut(
@@ -98,8 +100,10 @@ fn check_valid_shortcut(
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct ShortcutManager {
     shortcuts: HashMap<KeyCommand, VirtualShortcut>,
-    global_shortcut : SaveHotKeys,
-    changed_global_shortcut : bool,
+    global_shortcut: SaveHotKeys,
+    changed_global_shortcut: bool,
+    changed_settings: bool,
+    last_extension: String,
     show_window: bool,
     waiting_for_input: bool,
     editing_command: KeyCommand,
@@ -107,7 +111,7 @@ pub struct ShortcutManager {
     key_temp: Option<Key>,
     shortcut_invalid: Option<KeyCommand>,
     pub default_path: Option<PathBuf>,
-    pub extension : String ,
+    pub extension: String,
 }
 
 impl Default for ShortcutManager {
@@ -131,8 +135,10 @@ impl Default for ShortcutManager {
         );
         return Self {
             shortcuts: map,
-            global_shortcut : SaveHotKeys::new(),
-            changed_global_shortcut : false,
+            global_shortcut: SaveHotKeys::new(),
+            changed_global_shortcut: false,
+            changed_settings: false,
+            last_extension: ".png".to_string(),
             show_window: false,
             waiting_for_input: false,
             editing_command: KeyCommand::None,
@@ -140,7 +146,7 @@ impl Default for ShortcutManager {
             key_temp: None,
             shortcut_invalid: None,
             default_path: Some(PathBuf::from("./")),
-            extension : ".png".to_string(),
+            extension: ".png".to_string(),
         };
     }
 }
@@ -152,7 +158,7 @@ fn write_to_disk(temp: &ShortcutManager) -> anyhow::Result<()> {
         Ok(_) => {}
         Err(_) => {}
     }
-   let w_file = fs::File::options().read(true).write(true).create(true).open("./settings.txt")?;
+    let w_file = fs::File::options().read(true).write(true).create(true).open("./settings.txt")?;
     serde_json::to_writer(w_file, temp)?;
     Ok(())
 }
@@ -160,22 +166,20 @@ fn write_to_disk(temp: &ShortcutManager) -> anyhow::Result<()> {
 
 fn read_from_disk() -> anyhow::Result<ShortcutManager> {
     let file = fs::File::options().read(true).open("./settings.txt")?;
-        let res : ShortcutManager = serde_json::from_reader(file)?;
-        Ok(res)
+    let res: ShortcutManager = serde_json::from_reader(file)?;
+    Ok(res)
 }
 
 impl ShortcutManager {
-    
     pub fn new() -> Self {
-        
         let file_path = "./settings.txt";
-        let res : Self = match fs::metadata(file_path) {
+        let res: Self = match fs::metadata(file_path) {
             Ok(_) => {
                 match read_from_disk() {
                     Ok(mut res) => {
                         res.changed_global_shortcut = false;
                         res
-                    },
+                    }
                     Err(_) => {
                         ShortcutManager::default()
                     }
@@ -241,19 +245,18 @@ impl ShortcutManager {
                                             }
                                             None => {}
                                         }
-                                    }
-                                    else if self.editing_command == KeyCommand::TakeScreenshot {
+                                    } else if self.editing_command == KeyCommand::TakeScreenshot {
                                         let old = self.global_shortcut.clone();
                                         self.global_shortcut.set_hotkey(VirtualKey::from_key(self.key_temp.unwrap()).to_hotkey());
-                                        if old != self.global_shortcut{
+                                        if old != self.global_shortcut {
                                             self.changed_global_shortcut = true;
                                         }
                                         match self.global_shortcut.write_to_disk() {
-                                            Ok(_) => {},
-                                            Err(_) => {},
+                                            Ok(_) => {}
+                                            Err(_) => {}
                                         }
-                                            
                                     }
+                                    self.changed_settings = true;
                                     self.waiting_for_input = false;
                                     self.input_changed = false;
                                     self.shortcut_invalid = None;
@@ -288,7 +291,6 @@ impl ShortcutManager {
                             });
                         });
                         ui.add(egui::Separator::default());
-                        
                     }
 
                     ui.columns(3, |columns| {
@@ -310,60 +312,68 @@ impl ShortcutManager {
                     }
                     ui.add(egui::Separator::default());
 
-                    ui.columns(2, |columns|{
-                        columns[0].label(format!("{}",self.default_path.as_ref().unwrap().clone().as_path().display().to_string()));
+                    ui.columns(2, |columns| {
+                        columns[0].label(format!("{}", self.default_path.as_ref().unwrap().clone().as_path().display().to_string()));
                         columns[1].vertical_centered(|ui| {
-                    if ui.add(Button::new("Change default Path")).clicked() {
-
-                        match FileDialog::new().pick_folder() 
-                        {
-                            Some(path) => {  
-                                self.default_path= Some(path)
-                            }, 
-                            None => {}, 
-                        }
-                    }});       
+                            if ui.add(Button::new("Change default Path")).clicked() {
+                                self.changed_settings = true;
+                                match FileDialog::new().pick_folder()
+                                {
+                                    Some(path) => {
+                                        self.default_path = Some(path)
+                                    }
+                                    None => {}
+                                }
+                            }
+                        });
                     });
                     ui.add(egui::Separator::default());
-                    ui.columns(2, |columns|{
+                    ui.columns(2, |columns| {
                         columns[0].label(format!("Extension"));
                         columns[1].vertical_centered(|ui| {
-                    ComboBox::from_id_source(2)
-                            .width(50.0)
-                            .selected_text(format!("{}", self.extension.as_str()[1..self.extension.len()].to_string().to_ascii_uppercase()))
-                            .show_ui(ui, |ui| {
-                                ui.selectable_value(&mut self.extension, ".png".to_string(), "PNG");
-                                ui.selectable_value(&mut self.extension, ".jpg".to_string(), "JPG");
-                                ui.selectable_value(&mut self.extension, ".gif".to_string(), "GIF");
-                                ui.selectable_value(&mut self.extension, ".bmp".to_string(), "BMP");
-                            });      
+                            if ComboBox::from_id_source(2)
+                                .width(50.0)
+                                .selected_text(format!("{}", self.extension.as_str()[1..self.extension.len()].to_string().to_ascii_uppercase()))
+                                .show_ui(ui, |ui| {
+                                    ui.selectable_value(&mut self.extension, ".png".to_string(), "PNG");
+                                    ui.selectable_value(&mut self.extension, ".jpg".to_string(), "JPG");
+                                    ui.selectable_value(&mut self.extension, ".gif".to_string(), "GIF");
+                                    ui.selectable_value(&mut self.extension, ".bmp".to_string(), "BMP");
+                                }).response.clicked() {
+                                self.changed_settings = true;
+                            };
+                        });
                     });
-                });
-                    
-                ui.add(egui::Separator::default());
-                    if ui.add(Button::new("Save to disk")).clicked() {
 
-                
-                        let new_scm =  ShortcutManager {
-                            shortcuts: self.shortcuts.clone(),
-                            global_shortcut : self.global_shortcut.clone(),
-                            changed_global_shortcut : self.changed_global_shortcut,
-                            show_window: false,
-                            waiting_for_input: self.waiting_for_input,
-                            editing_command: self.editing_command.clone(),
-                            input_changed: self.input_changed,
-                            key_temp: self.key_temp.clone(),
-                            shortcut_invalid: self.shortcut_invalid.clone(),
-                            default_path: self.default_path.clone(),
-                            extension : self.extension.clone(),
-                        };
+                    ui.add(egui::Separator::default());
+                    if self.changed_settings {
+                        if ui.add(Button::new("Apply changes")).clicked() {
+                            self.changed_settings = false;
+                            let new_scm = ShortcutManager {
+                                shortcuts: self.shortcuts.clone(),
+                                global_shortcut: self.global_shortcut.clone(),
+                                changed_global_shortcut: self.changed_global_shortcut,
+                                changed_settings: false,
+                                last_extension: self.extension.clone(),
+                                show_window: false,
+                                waiting_for_input: self.waiting_for_input,
+                                editing_command: self.editing_command.clone(),
+                                input_changed: self.input_changed,
+                                key_temp: self.key_temp.clone(),
+                                shortcut_invalid: self.shortcut_invalid.clone(),
+                                default_path: self.default_path.clone(),
+                                extension: self.extension.clone(),
+                            };
 
-                        match write_to_disk(&new_scm)
-                        {
-                            Ok(_) => {},
-                            Err(_) => {},
-                        }; 
-                        
+                            match write_to_disk(&new_scm)
+                            {
+                                Ok(_) => {}
+                                Err(_) => {}
+                            };
+                        }
+                    }
+                    else {
+                        ui.add_enabled(false,Button::new("Apply changes"));
                     }
                 }
             });
@@ -372,7 +382,7 @@ impl ShortcutManager {
     pub fn show_window(&mut self) {
         return self.show_window = true;
     }
-    
+
     /// Use the shortcut linked to the KeyCommand passed to the function
     /// Return true if the shortcut is detected and false otherwise (or if the shortcut does not exist)
     pub fn use_shortcut(&mut self, ctx: &Context, command: &KeyCommand) -> bool {
@@ -386,11 +396,13 @@ impl ShortcutManager {
 struct VirtualKey {
     key: Key,
 }
+
 impl Into<Key> for VirtualKey {
     fn into(self) -> Key {
         self.key
     }
 }
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 struct VirtualShortcut {
     key: Key,
@@ -405,6 +417,7 @@ impl Into<KeyboardShortcut> for VirtualShortcut {
         }
     }
 }
+
 impl Into<KeyboardShortcut> for &VirtualShortcut {
     fn into(self) -> KeyboardShortcut {
         KeyboardShortcut {
@@ -413,6 +426,7 @@ impl Into<KeyboardShortcut> for &VirtualShortcut {
         }
     }
 }
+
 impl From<KeyboardShortcut> for VirtualShortcut {
     fn from(value: KeyboardShortcut) -> Self {
         Self {
@@ -430,11 +444,13 @@ impl VirtualShortcut {
         }
     }
 }
+
 impl Display for VirtualKey {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
+
 impl VirtualKey {
     fn from_key(key: Key) -> Self {
         return Self { key };
@@ -442,7 +458,7 @@ impl VirtualKey {
     fn to_string(&self) -> String {
         return format!("{}", self.key.name());
     }
-    fn to_hotkey(self) -> Code{
+    fn to_hotkey(self) -> Code {
         match self.key {
             Key::A => Code::KeyA,
             Key::B => Code::KeyB,
@@ -484,11 +500,11 @@ impl VirtualKey {
             Key::ArrowLeft => Code::ArrowLeft,
             Key::ArrowRight => Code::ArrowRight,
             Key::ArrowUp => Code::ArrowUp,
-            _ => {Code::KeyT}
+            _ => { Code::KeyT }
         }
     }
     fn from_hotkey(hotkey: Code) -> Self {
-        let mut res = Self{key : Key::T};
+        let mut res = Self { key: Key::T };
         match hotkey {
             Code::Digit0 => res.key = Key::Num0,
             Code::Digit1 => res.key = Key::Num1,
@@ -540,7 +556,7 @@ impl VirtualKey {
             Code::Numpad7 => res.key = Key::Num7,
             Code::Numpad8 => res.key = Key::Num8,
             Code::Numpad9 => res.key = Key::Num9,
-                        _ => {res.key = Key::T}
+            _ => { res.key = Key::T }
         }
         return res;
     }
