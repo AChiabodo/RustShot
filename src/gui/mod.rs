@@ -114,10 +114,10 @@ impl RustShot {
             ui.with_layout(Layout::left_to_right(Align::Center), |ui| {
                 self.shortcuts.render_window(ui);
                 if self.action == Action::None {
-                    let screenshot_btn = ui.add(Button::new("➕ New"));
+                    let screenshot_btn = ui.add(Button::new("➕ New")).on_hover_text("Take screenshot of selected display");
                     //Spawn edit and save only if screenshot is available
                     if self.curr_screenshot.is_some() {
-                        let screenshot_save_btn = ui.add(Button::new("💾 Save as"));
+                        let screenshot_save_btn = ui.add(Button::new("💾 Save as")).on_hover_text("Save screenshot as");
                         if screenshot_save_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::SaveScreenshot)
                         {
                             match &self.curr_screenshot {
@@ -128,7 +128,7 @@ impl RustShot {
                             }
                         }
 
-                        let screenshot_save_default_btn = ui.add(Button::new("💾 Save"));
+                        let screenshot_save_default_btn = ui.add(Button::new("💾 Save")).on_hover_text("Save screenshot in default path");
                         if screenshot_save_default_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::QuickSaveScreenshot)
                         {
                             match &self.curr_screenshot {
@@ -473,6 +473,9 @@ impl RustShot {
                     self.paint_info.text_info.writing = true;
                     self.paint_info.text_info.edge = into_relative_pos(ptr, img.rect);
                     self.paint_info.text_info.height = self.paint_info.text_info.curr_dim as f32;
+                    //Compute max_width/max_height when initializing a textarea
+                    self.paint_info.text_info.max_width = curr_screenshot.tmp_image.get_width() as f32 - self.paint_info.text_info.edge.x;
+                    self.paint_info.text_info.max_height = curr_screenshot.tmp_image.get_height() as f32 - self.paint_info.text_info.edge.y;
                 }
                 None => {}
             }
@@ -500,7 +503,7 @@ impl RustShot {
             let lines: Vec<&str> = self.paint_info.text_info.curr_str.split("\n").collect();
             self.paint_info.text_info.height = (lines.len() * self.paint_info.text_info.curr_dim as usize) as f32;
             let mut width = 0.;
-            for l in lines {
+            for l in &lines {
                 let t = measure_line(self.paint_info.text_info.curr_font.as_ref().unwrap(), l, Scale::uniform(self.paint_info.text_info.curr_dim as f32));
                 if t.0 >= width{
                     width = t.0;
@@ -529,12 +532,15 @@ impl RustShot {
                 for e in events {
                     match e {
                         Event::Text(str) => {
-                            self.paint_info.text_info.curr_str.insert_str(self.paint_info.text_info.cursor_x, str);
-                            self.paint_info.text_info.cursor_x += str.len();
+                            if self.paint_info.text_info.width < self.paint_info.text_info.max_width  {
+                                self.paint_info.text_info.curr_str.insert_str(self.paint_info.text_info.cursor_x, str);
+                                self.paint_info.text_info.cursor_x += str.len();
+                            }
                         }
                         Event::Key { key, pressed, .. } => {
                             if let egui::Key::Enter = key  {
-                                if *pressed {
+                                println!("height:{}, max_height:{}", self.paint_info.text_info.height, self.paint_info.text_info.max_height);
+                                if *pressed && self.paint_info.text_info.height < self.paint_info.text_info.max_height {
                                     self.paint_info.text_info.curr_str.insert_str(self.paint_info.text_info.cursor_x, "\n");
                                     self.paint_info.text_info.cursor_x += 1;
                                 }

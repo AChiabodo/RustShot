@@ -2,6 +2,7 @@ use crate::gui::image_proc_extra_mod::*;
 use std::cmp::max;
 use std::collections::VecDeque;
 use eframe::egui::Pos2;
+use egui::Rect;
 use image::DynamicImage;
 use imageproc::drawing;
 use rusttype::Font;
@@ -32,6 +33,7 @@ pub struct TextManager {
     pub height: f32,
     pub curr_dim: i32,
     pub max_width: f32,
+    pub max_height: f32,
     pub dirty: bool,
     //Needed since i rewrite everytime all the text on the screen during editing
     pub original_img: Image,
@@ -59,6 +61,7 @@ impl TextManager {
             original_img: img,
             cursor_x:0,
             cursor_y:0,
+            max_height: 0.0,
         }
     }
 
@@ -68,11 +71,20 @@ impl TextManager {
         self.curr_dim = 15;
         self.writing = false;
         self.max_width = 0.;
+        self.max_height = 0.;
         self.width = 0.;
         self.height = 0.;
         self.dirty = false;
         self.cursor_x = 0;
         self.cursor_y = 0;
+    }
+
+    pub fn update_max_width(&mut self, rect: Rect) {
+        self.max_width = rect.right() - self.edge.x;
+    }
+
+    pub fn update_max_height(&mut self, rect: Rect) {
+        self.max_height = rect.bottom() - self.edge.y;
     }
 }
 
@@ -194,6 +206,14 @@ impl Image {
 
     pub fn get_crop_index(&self) -> usize {
         self.crop_index
+    }
+
+    pub fn get_width (&self) -> u32 {
+        self.image.width()
+    }
+
+    pub fn get_height (&self) -> u32 {
+        self.image.height()
     }
 
 
