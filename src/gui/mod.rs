@@ -117,7 +117,7 @@ impl RustShot {
                     let screenshot_btn = ui.add(Button::new("➕ New"));
                     //Spawn edit and save only if screenshot is available
                     if self.curr_screenshot.is_some() {
-                        let screenshot_save_btn = ui.add(Button::new("💾 Save with name"));
+                        let screenshot_save_btn = ui.add(Button::new("💾 Save as"));
                         if screenshot_save_btn.clicked() || self.shortcuts.use_shortcut(ctx, &KeyCommand::SaveScreenshot)
                         {
                             match &self.curr_screenshot {
@@ -457,8 +457,8 @@ impl RustShot {
     /// Logic for painting on the image
     fn paint_logic(&mut self, img: Response, ui: &mut Ui, rect: Rect) {
         let curr_screenshot = self.curr_screenshot.as_mut().unwrap();
+        //If the tool is not Text, and text_info is dirty (update tmp_image so that it gets the changes without the temporary cursor and textarrea)
         if self.paint_info.curr_tool != Tool::Text && self.paint_info.text_info.dirty {
-            self.paint_info.text_info.text_areas.push(self.paint_info.text_info.clone());
             self.paint_info.text_info.reset();
             //Set tmp img in order to delete the text area
             curr_screenshot.set_tmp_image(curr_screenshot.get_last_image());

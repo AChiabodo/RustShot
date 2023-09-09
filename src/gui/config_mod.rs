@@ -20,13 +20,13 @@ impl KeyCommand {
                 "Edit".to_string()
             },
             KeyCommand::SaveScreenshot => {
-                "Save Screenshot".to_string()
+                "Save as".to_string()
             },
             KeyCommand::TakeScreenshot => {
                 "Take Screenshot".to_string()
             },
             KeyCommand::QuickSaveScreenshot => {
-                "Quick Screenshot".to_string()
+                "Quick save".to_string()
             },
             KeyCommand::None => {
                 "None".to_string()
