@@ -578,9 +578,13 @@ impl RustShot {
         } else {
             if img.dragged() && self.paint_info.curr_tool != Tool::None {
                 if !self.paint_info.painting {
-                    self.paint_info.painting = true;
-                    self.paint_info.last_ptr =
-                        into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
+                    match img.hover_pos(){
+                        None => {}
+                        Some(pos) => {
+                            self.paint_info.last_ptr = into_relative_pos(pos, img.rect);
+                            self.paint_info.painting = true;
+                        }
+                    }
                 }
                 self.paint_info.curr_ptr = match img.hover_pos() {
                     Some(pos) => into_relative_pos(pos, img.rect),
