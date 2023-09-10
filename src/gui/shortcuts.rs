@@ -17,7 +17,7 @@ pub struct SaveHotKeys {
 impl Default for SaveHotKeys {
     fn default() -> Self {
         SaveHotKeys {
-            modifier: global_hotkey::hotkey::Modifiers::SHIFT,
+            modifier: global_hotkey::hotkey::Modifiers::ALT,
             key: Code::KeyS,
         }
     }
@@ -29,9 +29,15 @@ impl Into<VirtualKey> for SaveHotKeys {
     }
 }
 
+impl Display for SaveHotKeys {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
 impl Into<VirtualShortcut> for SaveHotKeys {
     fn into(self) -> VirtualShortcut {
-        VirtualShortcut::new(Modifiers::SHIFT, VirtualKey::from_hotkey(self.key).into())
+        VirtualShortcut::new(Modifiers::ALT, VirtualKey::from_hotkey(self.key).into())
     }
 }
 
@@ -46,8 +52,8 @@ impl SaveHotKeys {
             }
         };
     }
-    fn to_string(&self) {
-        format!("{:?} {}", self.modifier, self.key.to_string());
+    fn to_string(&self) -> String {
+        format!("{:?} - {}", self.modifier, self.key.to_string())
     }
     fn write_to_disk(&self) -> std::io::Result<()> {
         let temp = self.clone();
@@ -131,7 +137,7 @@ impl Default for ShortcutManager {
         );
         map.insert(
             KeyCommand::QuickSaveScreenshot,
-            VirtualShortcut::new(Modifiers::CTRL, Key::C),
+            VirtualShortcut::new(Modifiers::CTRL, Key::Q),
         );
         return Self {
             shortcuts: map,
@@ -296,7 +302,7 @@ impl ShortcutManager {
                     ui.columns(3, |columns| {
                         columns[0].label(format!("Screenshot"));
                         columns[1].label(format!(
-                            "SHIFT + {}",
+                            "ALT + {}",
                             VirtualKey::from_hotkey(self.global_shortcut.get_hotkey())
                         ));
                         columns[2].vertical_centered(|ui| {
