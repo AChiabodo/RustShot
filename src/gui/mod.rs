@@ -629,8 +629,8 @@ impl RustShot {
                 }
             } else if img.drag_released() && self.paint_info.curr_tool != Tool::None {
                 if self.paint_info.curr_tool == Tool::Crop {
-                    self.paint_info.curr_ptr =
-                        into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
+                    //self.paint_info.curr_ptr =
+                    //    into_relative_pos(img.interact_pointer_pos().unwrap(), img.rect);
                     let width = max(
                         1,
                         (self.paint_info.curr_ptr.x - self.paint_info.last_ptr.x).abs() as i32,
