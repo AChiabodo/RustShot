@@ -335,7 +335,7 @@ impl ShortcutManager {
                     });
                     ui.add(egui::Separator::default());
                     ui.columns(2, |columns| {
-                        columns[0].label(format!("Extension"));
+                        columns[0].label(format!("Default Extension"));
                         columns[1].vertical_centered(|ui| {
                             if ComboBox::from_id_source(2)
                                 .width(50.0)
