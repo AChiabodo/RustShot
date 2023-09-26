@@ -664,11 +664,11 @@ impl RustShot {
                     curr_screenshot.stack_image(img.clone());
                     curr_screenshot.set_tmp_image(img);
                     curr_screenshot.push_crop_image(crop_image);
+                    self.paint_info.curr_tool = Tool::None;
                 } else {
                     curr_screenshot.stack_image(curr_screenshot.get_tmp_image());
                 }
                 self.paint_info.soft_reset();
-                self.paint_info.curr_tool = Tool::None;
             }
         }
         //Change cursor when using a tool
