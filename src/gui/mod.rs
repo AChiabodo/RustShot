@@ -25,7 +25,7 @@ use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread;
 use std::time::{Duration, UNIX_EPOCH};
 use eframe::emath::Rect;
-use egui::{Event, Vec2};
+use egui::{Event, InputState, Vec2};
 use rusttype::{Font, Scale};
 
 use self::shortcuts::{ShortcutManager, SaveHotKeys};
@@ -668,6 +668,7 @@ impl RustShot {
                     curr_screenshot.stack_image(curr_screenshot.get_tmp_image());
                 }
                 self.paint_info.soft_reset();
+                self.paint_info.curr_tool = Tool::None;
             }
         }
         //Change cursor when using a tool
