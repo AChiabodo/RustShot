@@ -1,5 +1,5 @@
 # RustShot
-RustShot is a graphical, cross-platform, lightweight screen capture and resizing tool
+RustShot is a graphical, cross-platform (Mac, Windows, Linux), lightweight screen capture and resizing tool
 
 ## Screenshots
 
